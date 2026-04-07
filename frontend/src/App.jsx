@@ -5,7 +5,12 @@ function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL;
+  // 🔥 pega variável do Vercel
+  const API_URL =
+    import.meta.env.VITE_API_URL ||
+    "https://synapsysai-production.up.railway.app";
+
+  console.log("API_URL FRONT:", API_URL);
 
   const sendMessage = async () => {
     if (!input) return;
@@ -25,19 +30,33 @@ function App() {
         body: JSON.stringify({ input }),
       });
 
+      if (!res.ok) {
+        throw new Error("Erro HTTP: " + res.status);
+      }
+
       const data = await res.json();
+
+      console.log("RESPOSTA API:", data);
 
       const aiMessage = {
         role: "ai",
-        content: data.response || data.details || "Sem resposta da IA",
+        content:
+          data.response ||
+          data.details ||
+          "A IA respondeu, mas sem conteúdo.",
       };
 
       setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
-      console.error(error);
+      console.error("ERRO FETCH:", error);
+
       setMessages((prev) => [
         ...prev,
-        { role: "ai", content: "Erro de conexão com o servidor." },
+        {
+          role: "ai",
+          content:
+            "Erro de conexão com o servidor. Verifique API_URL ou backend.",
+        },
       ]);
     }
 
