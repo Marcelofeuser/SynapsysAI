@@ -5,6 +5,8 @@ function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const sendMessage = async () => {
     if (!input) return;
 
@@ -15,7 +17,7 @@ function App() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:4000/synapsys/analyze", {
+      const res = await fetch(`${API_URL}/synapsys/analyze`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -31,7 +33,6 @@ function App() {
       };
 
       setMessages((prev) => [...prev, aiMessage]);
-
     } catch (error) {
       console.error(error);
       setMessages((prev) => [
@@ -47,19 +48,24 @@ function App() {
     <div style={{ padding: 20, fontFamily: "Arial" }}>
       <h1>Synapsys AI</h1>
 
-      <div style={{
-        border: "1px solid #ccc",
-        borderRadius: 10,
-        padding: 20,
-        height: 400,
-        overflowY: "auto",
-        marginBottom: 20
-      }}>
+      <div
+        style={{
+          border: "1px solid #ccc",
+          borderRadius: 10,
+          padding: 20,
+          height: 400,
+          overflowY: "auto",
+          marginBottom: 20,
+        }}
+      >
         {messages.map((msg, index) => (
-          <div key={index} style={{
-            marginBottom: 10,
-            textAlign: msg.role === "user" ? "right" : "left"
-          }}>
+          <div
+            key={index}
+            style={{
+              marginBottom: 10,
+              textAlign: msg.role === "user" ? "right" : "left",
+            }}
+          >
             <strong>{msg.role === "user" ? "Você" : "Synapsys"}:</strong>
             <div>{msg.content}</div>
           </div>
