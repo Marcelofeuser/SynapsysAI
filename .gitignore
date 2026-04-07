@@ -1,0 +1,14 @@
+node_modules/
+backend/node_modules/
+
+.env
+backend/.env
+frontend/synapsys-tests/.env
+
+dist/
+.DS_Store
+
+playwright-report/
+test-results/
+*.zip
+**/test-results/
