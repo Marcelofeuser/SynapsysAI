@@ -54,8 +54,12 @@ function isDiscMessage(input) {
 }
 
 async function generateInsight(userInput) {
-  const systemPromptPath = path.join(__dirname, "../prompts/system-prompt.md");
-  const systemPrompt = fs.readFileSync(systemPromptPath, "utf-8").trim();
+  const FALLBACK_PROMPT = "Você é a Synapsys AI, um sistema de inteligência artificial focado em automação, análise e tomada de decisão para empresas. Seja claro, direto e entregue soluções práticas.";
+
+  const systemPromptPath = path.join(__dirname, "../../prompts/system-prompt.md");
+  const systemPrompt = fs.existsSync(systemPromptPath)
+    ? fs.readFileSync(systemPromptPath, "utf-8").trim()
+    : FALLBACK_PROMPT;
 
   if (isDiscMessage(userInput) && process.env.ANTHROPIC_API_KEY) {
     console.log("Roteando para Claude (DISC detectado)");
