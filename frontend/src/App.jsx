@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -86,7 +87,11 @@ function App() {
             }}
           >
             <strong>{msg.role === "user" ? "Você" : "Synapsys"}:</strong>
-            <div>{msg.content}</div>
+            {msg.role === "ai" ? (
+              <ReactMarkdown>{msg.content}</ReactMarkdown>
+            ) : (
+              <div>{msg.content}</div>
+            )}
           </div>
         ))}
       </div>
