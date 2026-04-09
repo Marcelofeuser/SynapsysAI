@@ -1,8 +1,8 @@
+const cors = require("cors");
 const cors = require('cors');
 const OpenAI = require("openai");
 const { loadAllPrompts, loadModePrompt } = require("./src/ai/loadPrompts");
 const express = require("express");
-const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
@@ -19,9 +19,16 @@ const Anthropic = require("@anthropic-ai/sdk");
 
 const app = express();
 
-app.use(cors());
 app.use(express.json());
-app.use(cors({  origin: [    'http://localhost:5174',    'http://localhost:5173',    'https://synapsys-ai.vercel.app',    'https://app.insightdisc.com'  ],  credentials: true}));
+app.use(cors({
+  origin: [
+    'http://localhost:5174',
+    'http://localhost:5173',
+    'https://synapsys-ai.vercel.app',
+    'https://app.insightdisc.com'
+  ],
+  credentials: true
+}));
 
 // --- Providers ---
 // FIX: instanciar providers apenas se a chave existir,
