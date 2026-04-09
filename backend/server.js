@@ -1,8 +1,18 @@
+const cors = require('cors');
+const OpenAI = require("openai");
+const { loadAllPrompts, loadModePrompt } = require("./src/ai/loadPrompts");
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
+
+const BASE_DOMAIN = process.env.BASE_DOMAIN || "insightdisc.com";
+const SYNAPSYS_SUBDOMAIN = process.env.SYNAPSYS_SUBDOMAIN || "synapsys";
+const SYNAPSYS_PROTOCOL = process.env.SYNAPSYS_PROTOCOL || "https";
+
+const SYNAPSYS_DOMAIN = `${SYNAPSYS_SUBDOMAIN}.${BASE_DOMAIN}`;
+const SYNAPSYS_URL = `${SYNAPSYS_PROTOCOL}://${SYNAPSYS_DOMAIN}`;
 
 const Groq = require("groq-sdk");
 const Anthropic = require("@anthropic-ai/sdk");
@@ -11,13 +21,21 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(cors({  origin: [    'http://localhost:5174',    'http://localhost:5173',    'https://synapsys-ai.vercel.app',    'https://app.insightdisc.com'  ],  credentials: true}));
 
 // --- Providers ---
 // FIX: instanciar providers apenas se a chave existir,
 //      evitando crash na inicialização do servidor
 
+let openai = null;
 let groq = null;
 let anthropic = null;
+
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+} else {
+  console.warn("⚠️  OPENAI_API_KEY não configurada — provider OpenAI desativado");
+}
 
 if (process.env.GROQ_API_KEY) {
   groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -29,6 +47,21 @@ if (process.env.ANTHROPIC_API_KEY) {
   anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 } else {
   console.warn("⚠️  ANTHROPIC_API_KEY não configurada — provider Claude desativado");
+}
+
+async function openaiProvider(systemPrompt, userInput) {
+  if (!openai) throw new Error("OpenAI não configurada: OPENAI_API_KEY ausente nas variáveis de ambiente");
+
+  const response = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+    temperature: 0.3,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userInput },
+    ],
+  });
+
+  return response.choices?.[0]?.message?.content || "";
 }
 
 async function groqProvider(systemPrompt, userInput) {
@@ -60,8 +93,8 @@ async function claudeProvider(systemPrompt, userInput) {
   return textBlock?.text || "";
 }
 
-// FIX: termos DISC mais precisos — removidos " D ", " I ", " S ", " C " e "perfil"
-//      que geravam falsos positivos em perguntas comuns do AI Lab e Coach
+// FIX: termos DISC mais precisos — mantidos para uso futuro,
+//      mas o roteamento principal agora é por AI_PROVIDER
 const DISC_TERMS = [
   "DISC",
   "dominân", "dominan",
@@ -80,54 +113,84 @@ function isDiscMessage(input) {
   return DISC_TERMS.some((term) => upper.includes(term.toUpperCase()));
 }
 
-// FIX: roteamento usa AI_PROVIDER como configuração explícita;
-//      fallback para Claude só acontece se a chave estiver disponível
-async function generateInsight(userInput) {
+// FIX: agora usa prompts estruturados + modo operacional
+//      OpenAI vira provider principal por configuração explícita
+async function generateInsight(userInput, mode = "builder") {
   const FALLBACK_PROMPT =
     "Você é a Synapsys AI, um sistema de inteligência artificial focado em automação, análise e tomada de decisão para empresas. Seja claro, direto e entregue soluções práticas.";
 
-  const systemPromptPath = path.join(__dirname, "prompts/system-prompt.md");
-  const systemPrompt = fs.existsSync(systemPromptPath)
-    ? fs.readFileSync(systemPromptPath, "utf-8").trim()
-    : FALLBACK_PROMPT;
+  let basePrompt = FALLBACK_PROMPT;
 
-  const provider = (process.env.AI_PROVIDER || "groq").toLowerCase();
-
-  // Roteamento DISC — só vai para Claude se for DISC E Claude estiver disponível
-  if (isDiscMessage(userInput) && anthropic) {
-    console.log("Roteando para Claude (DISC detectado)");
-    const text = await claudeProvider(systemPrompt, userInput);
-    return { text, source: "claude" };
+  try {
+    basePrompt = loadAllPrompts();
+  } catch (error) {
+    console.warn("⚠️  Falha ao carregar prompts estruturados:", error.message);
   }
 
-  // Roteamento explícito por AI_PROVIDER=claude
+  let modePrompt = "";
+  try {
+    modePrompt = loadModePrompt(mode || "builder");
+  } catch (error) {
+    console.warn("⚠️  Falha ao carregar mode prompt:", error.message);
+  }
+
+  const systemPrompt = [basePrompt, modePrompt].filter(Boolean).join("\n\n");
+  const provider = (process.env.AI_PROVIDER || "openai").toLowerCase();
+
+  // OpenAI como provider principal
+  if (provider === "openai" && openai) {
+    const text = await openaiProvider(systemPrompt, userInput);
+    return { text, source: "openai" };
+  }
+
+  // Claude explicitamente configurado
   if (provider === "claude" && anthropic) {
     const text = await claudeProvider(systemPrompt, userInput);
     return { text, source: "claude" };
   }
 
-  // Groq como provider principal
-  if (groq) {
+  // Groq explicitamente configurado
+  if (provider === "groq" && groq) {
     try {
       const text = await groqProvider(systemPrompt, userInput);
       return { text, source: "groq" };
     } catch (groqError) {
       console.warn("Groq falhou:", groqError.message);
 
-      // FIX: fallback para Claude SOMENTE se a chave existir
+      if (openai) {
+        console.warn("Tentando OpenAI como fallback...");
+        const text = await openaiProvider(systemPrompt, userInput);
+        return { text, source: "openai-fallback" };
+      }
+
       if (anthropic) {
         console.warn("Tentando Claude como fallback...");
         const text = await claudeProvider(systemPrompt, userInput);
         return { text, source: "claude-fallback" };
       }
 
-      // Sem fallback disponível — erro claro para o log do Railway
       throw new Error(`Groq falhou e não há fallback disponível. Erro: ${groqError.message}`);
     }
   }
 
+  // Fallbacks automáticos se AI_PROVIDER apontar para algo indisponível
+  if (openai) {
+    const text = await openaiProvider(systemPrompt, userInput);
+    return { text, source: "openai-fallback-default" };
+  }
+
+  if (groq) {
+    const text = await groqProvider(systemPrompt, userInput);
+    return { text, source: "groq-fallback-default" };
+  }
+
+  if (anthropic) {
+    const text = await claudeProvider(systemPrompt, userInput);
+    return { text, source: "claude-fallback-default" };
+  }
+
   throw new Error(
-    "Nenhum provider de IA configurado. Defina GROQ_API_KEY ou ANTHROPIC_API_KEY nas variáveis de ambiente do Railway."
+    "Nenhum provider de IA configurado. Defina OPENAI_API_KEY, GROQ_API_KEY ou ANTHROPIC_API_KEY nas variáveis de ambiente do Railway."
   );
 }
 
@@ -141,43 +204,54 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    provider: process.env.AI_PROVIDER || "groq",
+    provider: process.env.AI_PROVIDER || "openai",
+    openai_configured: !!openai,
     groq_configured: !!groq,
     claude_configured: !!anthropic,
+    openai_model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
     groq_model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
+    claude_model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
+    
+    synapsys_domain: SYNAPSYS_DOMAIN,
+    synapsys_url: SYNAPSYS_URL,
   });
 });
 
 app.post("/synapsys/analyze", async (req, res) => {
   try {
-    const { input } = req.body;
+    const { input, mode } = req.body;
 
     if (!input) {
       return res.status(400).json({ error: "Input é obrigatório" });
     }
 
-    const { text, source } = await generateInsight(input);
+    const { text, source } = await generateInsight(input, mode || "builder");
 
-    return res.json({ success: true, source, response: text });
+    return res.json({
+      success: true,
+      source,
+      mode: mode || "builder",
+      response: text,
+    });
   } catch (error) {
     console.error("ERRO IA:", error.message);
 
-    // FIX: retorna 500 (não 200) para que o frontend possa detectar o erro
     return res.status(500).json({
       success: false,
       source: "error",
       response:
-        "Não foi possível processar sua mensagem. Verifique as variáveis de ambiente (GROQ_API_KEY) no painel do Railway.",
+        "Não foi possível processar sua mensagem. Verifique as variáveis de ambiente do provider configurado.",
       error: error.message,
     });
   }
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = Number(process.env.PORT) || 4010;
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`   Provider principal : ${process.env.AI_PROVIDER || "groq"}`);
+  console.log(`   Provider principal : ${process.env.AI_PROVIDER || "openai"}`);
+  console.log(`   OpenAI             : ${openai ? "✅ ativo (" + (process.env.OPENAI_MODEL || "gpt-4.1-mini") + ")" : "❌ inativo (OPENAI_API_KEY não definida)"}`);
   console.log(`   Groq               : ${groq ? "✅ ativo (" + (process.env.GROQ_MODEL || "llama-3.1-8b-instant") + ")" : "❌ inativo (GROQ_API_KEY não definida)"}`);
-  console.log(`   Claude             : ${anthropic ? "✅ ativo" : "❌ inativo (ANTHROPIC_API_KEY não definida)"}\n`);
+  console.log(`   Claude             : ${anthropic ? "✅ ativo (" + (process.env.CLAUDE_MODEL || "claude-sonnet-4-6") + ")" : "❌ inativo (ANTHROPIC_API_KEY não definida)"}\n`);
 });
