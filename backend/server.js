@@ -18,7 +18,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 
 const app = express();
 
-app.use(express.json()
+app.use(express.json());
 
 app.use(cors({
   origin: [
@@ -28,7 +28,7 @@ app.use(cors({
     'https://app.insightdisc.com'
   ],
   credentials: true
-})));
+}));
 
 
 // --- Providers ---
@@ -118,7 +118,7 @@ const DISC_TERMS = [
 
 function isDiscMessage(input) {
   const upper = input.toUpperCase();
-  return DISC_TERMS.some((term) => upper.includes(term.toUpperCase()));
+  return DISC_TERMS.some((term) => upper.includes(term.toUpperCase());
 }
 
 // FIX: agora usa prompts estruturados + modo operacional
