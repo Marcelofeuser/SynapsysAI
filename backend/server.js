@@ -23,6 +23,7 @@ app.use(express.json());
 app.use(
   cors({
     origin: [
+      "http://localhost:5176",
       "http://localhost:5174",
       "http://localhost:5173",
       "https://synapsys-ai.vercel.app",
@@ -215,7 +216,68 @@ async function generateInsight(userInput, mode = "builder") {
   );
 }
 
-// --- Routes ---
+// ════════════════════════════════════════════════════════
+//  STATS — rastreamento em memória
+// ════════════════════════════════════════════════════════
+const stats = {
+  totalRequests: 0,
+  totalErrors: 0,
+  responseTimes: [],        // últimos 100 tempos de resposta (ms)
+  requestsPerDay: {},       // { "2026-04-10": 42 }
+  recentLogs: [],           // últimas 50 interações
+  startedAt: new Date().toISOString(),
+};
+
+function trackRequest({ input, output, source, durationMs, error = false }) {
+  stats.totalRequests++;
+  if (error) stats.totalErrors++;
+
+  stats.responseTimes.push(durationMs);
+  if (stats.responseTimes.length > 100) stats.responseTimes.shift();
+
+  const today = new Date().toISOString().slice(0, 10);
+  stats.requestsPerDay[today] = (stats.requestsPerDay[today] || 0) + 1;
+
+  stats.recentLogs.unshift({
+    ts: new Date().toISOString(),
+    input: (input || "").slice(0, 120),
+    output: error ? "[ERRO]" : (output || "").slice(0, 200),
+    source,
+    durationMs,
+    error,
+  });
+  if (stats.recentLogs.length > 50) stats.recentLogs.pop();
+}
+
+// ════════════════════════════════════════════════════════
+//  ADMIN AUTH middleware
+// ════════════════════════════════════════════════════════
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "synapsys-admin-2026";
+const activeSessions = new Set();   // tokens simples em memória
+
+function adminAuth(req, res, next) {
+  const token = req.headers["x-admin-token"] || req.query.token;
+  if (!token || !activeSessions.has(token)) {
+    return res.status(401).json({ error: "Não autorizado. Faça login em /admin/login" });
+  }
+  next();
+}
+
+// ════════════════════════════════════════════════════════
+//  ADMIN CONFIG em memória (sobrescreve temporariamente)
+// ════════════════════════════════════════════════════════
+const runtimeConfig = {
+  aiProvider: null,        // null = usa env AI_PROVIDER
+  openaiModel: null,
+  groqModel: null,
+  claudeModel: null,
+  temperature: null,
+  systemPromptOverride: null,
+};
+
+// ════════════════════════════════════════════════════════
+//  ROUTES — público
+// ════════════════════════════════════════════════════════
 
 app.get("/", (req, res) => {
   res.json({ message: "Synapsys AI backend online" });
@@ -236,7 +298,28 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.get("/bootstrap-admin", async (req, res) => {
+  try {
+    const user = {
+      name: "Marcelo Feuser",
+      email: "admin@synapsys.ai",
+      role: "SUPER_ADMIN",
+      createdAt: new Date(),
+    };
+
+    console.log("🔥 SUPER ADMIN CRIADO:", user);
+
+    return res.json({
+      success: true,
+      user,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/synapsys/analyze", async (req, res) => {
+  const t0 = Date.now();
   try {
     const { input, mode } = req.body;
 
@@ -245,6 +328,9 @@ app.post("/synapsys/analyze", async (req, res) => {
     }
 
     const { text, source } = await generateInsight(input, mode || "builder");
+    const durationMs = Date.now() - t0;
+
+    trackRequest({ input, output: text, source, durationMs, error: false });
 
     return res.json({
       success: true,
@@ -254,6 +340,7 @@ app.post("/synapsys/analyze", async (req, res) => {
     });
   } catch (error) {
     console.error("ERRO IA:", error.message);
+    trackRequest({ input: req.body?.input, output: "", source: "error", durationMs: Date.now() - t0, error: true });
 
     return res.status(500).json({
       success: false,
@@ -263,6 +350,92 @@ app.post("/synapsys/analyze", async (req, res) => {
       error: error.message,
     });
   }
+});
+
+// ════════════════════════════════════════════════════════
+//  ADMIN ROUTES
+// ════════════════════════════════════════════════════════
+
+// Login — retorna token de sessão
+app.post("/admin/login", (req, res) => {
+  const { password } = req.body;
+  if (!password || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: "Senha incorreta" });
+  }
+  const token = `sat_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  activeSessions.add(token);
+  // expira em 8h
+  setTimeout(() => activeSessions.delete(token), 8 * 60 * 60 * 1000);
+  res.json({ token });
+});
+
+// Logout
+app.post("/admin/logout", adminAuth, (req, res) => {
+  const token = req.headers["x-admin-token"] || req.query.token;
+  activeSessions.delete(token);
+  res.json({ ok: true });
+});
+
+// Stats do dashboard
+app.get("/admin/stats", adminAuth, (req, res) => {
+  const avgResponse = stats.responseTimes.length
+    ? Math.round(stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length)
+    : 0;
+
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const key = d.toISOString().slice(0, 10);
+    return { date: key, count: stats.requestsPerDay[key] || 0 };
+  });
+
+  res.json({
+    totalRequests: stats.totalRequests,
+    totalErrors: stats.totalErrors,
+    errorRate: stats.totalRequests ? ((stats.totalErrors / stats.totalRequests) * 100).toFixed(1) : "0.0",
+    avgResponseMs: avgResponse,
+    uptime: Math.round((Date.now() - new Date(stats.startedAt).getTime()) / 1000),
+    startedAt: stats.startedAt,
+    last7Days,
+    providers: {
+      openai: { configured: !!openai, model: process.env.OPENAI_MODEL || "gpt-4.1-mini" },
+      groq:   { configured: !!groq,   model: process.env.GROQ_MODEL || "llama-3.1-8b-instant" },
+      claude: { configured: !!anthropic, model: process.env.CLAUDE_MODEL || "claude-sonnet-4-6" },
+      active: runtimeConfig.aiProvider || process.env.AI_PROVIDER || "openai",
+    },
+  });
+});
+
+// Logs recentes
+app.get("/admin/logs", adminAuth, (req, res) => {
+  res.json({ logs: stats.recentLogs });
+});
+
+// Config atual
+app.get("/admin/config", adminAuth, (req, res) => {
+  res.json({
+    aiProvider:           runtimeConfig.aiProvider || process.env.AI_PROVIDER || "openai",
+    openaiModel:          runtimeConfig.openaiModel || process.env.OPENAI_MODEL || "gpt-4.1-mini",
+    groqModel:            runtimeConfig.groqModel || process.env.GROQ_MODEL || "llama-3.1-8b-instant",
+    claudeModel:          runtimeConfig.claudeModel || process.env.CLAUDE_MODEL || "claude-sonnet-4-6",
+    temperature:          runtimeConfig.temperature ?? 0.3,
+    systemPromptOverride: runtimeConfig.systemPromptOverride || null,
+    baseDomain:           process.env.BASE_DOMAIN || "insightdisc.com",
+  });
+});
+
+// Atualizar config em runtime
+app.post("/admin/config", adminAuth, (req, res) => {
+  const { aiProvider, openaiModel, groqModel, claudeModel, temperature, systemPromptOverride } = req.body;
+  if (aiProvider)            runtimeConfig.aiProvider = aiProvider;
+  if (openaiModel)           runtimeConfig.openaiModel = openaiModel;
+  if (groqModel)             runtimeConfig.groqModel = groqModel;
+  if (claudeModel)           runtimeConfig.claudeModel = claudeModel;
+  if (temperature !== undefined) runtimeConfig.temperature = Number(temperature);
+  if (systemPromptOverride !== undefined) runtimeConfig.systemPromptOverride = systemPromptOverride || null;
+
+  console.log("⚙️ Config atualizada pelo admin:", runtimeConfig);
+  res.json({ ok: true, config: runtimeConfig });
 });
 
 const PORT = Number(process.env.PORT) || 4010;

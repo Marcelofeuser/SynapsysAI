@@ -564,7 +564,7 @@ function createTimeoutSignal(timeoutMs = 0) {
 async function syncBackendHealth({ silent = false } = {}) {
   const healthPath = String(CONFIG.HEALTH_PATH || '/health').trim() || '/health';
   const computedHealthUrl = joinUrl(CONFIG.RAILWAY_URL, healthPath);
-  const fixedHealthUrl = 'https://synapsysai-production.up.railway.app/health';
+  const fixedHealthUrl = 'https://synapsys.insightdisc.com/health';
   const healthUrl = CONFIG.DEBUG_FORCE_FIXED_HEALTH_URL ? fixedHealthUrl : computedHealthUrl;
 
   if (!silent) {
