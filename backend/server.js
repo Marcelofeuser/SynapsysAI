@@ -1,3 +1,5 @@
+const { renderDiscReport } = require("./src/disc/renderDiscReport");
+const { loadDiscBase } = require("./src/knowledge/loadDiscBase");
 const cors = require("cors");
 const OpenAI = require("openai");
 const { loadAllPrompts, loadModePrompt } = require("./src/ai/loadPrompts");
@@ -57,6 +59,15 @@ if (process.env.ANTHROPIC_API_KEY) {
   anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 } else {
   console.warn("⚠️ ANTHROPIC_API_KEY não configurada — provider Claude desativado");
+}
+
+let discBase = {};
+
+try {
+  discBase = loadDiscBase();
+  console.log("✅ Base DISC carregada com sucesso");
+} catch (error) {
+  console.warn("⚠️ Falha ao carregar base DISC:", error.message);
 }
 
 async function openaiProvider(systemPrompt, userInput) {
@@ -298,6 +309,14 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.get("/disc/base", (req, res) => {
+  return res.json({
+    ok: true,
+    factors: Object.keys(discBase),
+    discBase,
+  });
+});
+
 app.get("/bootstrap-admin", async (req, res) => {
   try {
     const user = {
@@ -312,7 +331,7 @@ app.get("/bootstrap-admin", async (req, res) => {
     return res.json({
       success: true,
       user,
-    });
+    }); 
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
@@ -439,6 +458,58 @@ app.post("/admin/config", adminAuth, (req, res) => {
 });
 
 const PORT = Number(process.env.PORT) || 4010;
+
+
+// ─────────────────────────────────────────────
+// DISC PREMIUM REPORT
+// ─────────────────────────────────────────────
+app.post("/generate-disc-report", async (req, res) => {
+  try {
+    const { scores } = req.body;
+
+    if (!scores || typeof scores !== "object") {
+      return res.status(400).json({ error: "Scores DISC são obrigatórios" });
+    }
+
+    const html = await renderDiscReport(req.body);
+
+    const puppeteer = require("puppeteer");
+
+    const browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+
+    const pdf = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "8mm",
+        bottom: "8mm",
+        left: "8mm",
+        right: "8mm"
+      }
+    });
+
+    await browser.close();
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": "attachment; filename=relatorio-disc-premium.pdf"
+    });
+
+    res.send(pdf);
+  } catch (error) {
+    console.error("ERRO DISC:", error);
+    res.status(500).json({
+      error: error?.message || "Erro ao gerar relatório DISC premium",
+      stack: error?.stack || null
+    });
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
