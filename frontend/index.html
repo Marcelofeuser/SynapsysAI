@@ -468,7 +468,7 @@
    ═══════════════════════════════════════════════════════════ */
 const CONFIG = {
   // ✅ URL do Railway
-  RAILWAY_URL: "https://synapsys.insightdisc.com",
+  RAILWAY_URL: "https://ai.insightdisc.com",
 
   // ✅ Health check do backend (status visual)
   HEALTH_PATH: "/health",
@@ -564,7 +564,7 @@ function createTimeoutSignal(timeoutMs = 0) {
 async function syncBackendHealth({ silent = false } = {}) {
   const healthPath = String(CONFIG.HEALTH_PATH || '/health').trim() || '/health';
   const computedHealthUrl = joinUrl(CONFIG.RAILWAY_URL, healthPath);
-  const fixedHealthUrl = 'https://synapsys.insightdisc.com/health';
+  const fixedHealthUrl = 'https://ai.insightdisc.com/health';
   const healthUrl = CONFIG.DEBUG_FORCE_FIXED_HEALTH_URL ? fixedHealthUrl : computedHealthUrl;
 
   if (!silent) {

@@ -9,7 +9,7 @@ function App() {
   // 🔥 pega variável do Vercel
   const API_URL =
     import.meta.env.VITE_API_URL ||
-    "https://synapsys.insightdisc.com";
+    "https://ai.insightdisc.com";
 
   console.log("API_URL FRONT:", API_URL);
 
