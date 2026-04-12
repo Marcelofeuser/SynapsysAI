@@ -606,7 +606,7 @@ async function syncBackendHealth({ silent = false } = {}) {
 
     const data = await res.json().catch(() => null);
 
-    if (res.ok && data?.status === 'ok') {
+    if (res.ok && (data?.status === 'ok' || data?.ok === true || data?.service)) {
       setStatus('online');
       apiStatusText.textContent = `Online (GET ${healthPath})`;
       return true;
