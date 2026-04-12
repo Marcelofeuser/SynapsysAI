@@ -17,6 +17,22 @@ const SYNAPSYS_URL = `${SYNAPSYS_PROTOCOL}://${SYNAPSYS_DOMAIN}`;
 
 const Groq = require("groq-sdk");
 const Anthropic = require("@anthropic-ai/sdk");
+const { createClient } = require("@supabase/supabase-js");
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+async function requireUser(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.status(401).json({ error: "Token não enviado" });
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: "Token inválido ou expirado" });
+  req.user = user;
+  next();
+}
 
 const app = express();
 
@@ -337,7 +353,32 @@ app.get("/bootstrap-admin", async (req, res) => {
   }
 });
 
-app.post("/synapsys/analyze", async (req, res) => {
+app.post("/auth/register", async (req, res) => {
+  const { email, password, name } = req.body;
+  if (!email || !password || !name)
+    return res.status(400).json({ error: "email, password e name são obrigatórios" });
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) return res.status(400).json({ error: error.message });
+  if (data.user) {
+    await supabase.from("users").insert({ id: data.user.id, email, name });
+  }
+  res.json({ message: "Cadastro realizado.", user: data.user });
+});
+
+app.post("/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ error: "email e password são obrigatórios" });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return res.status(401).json({ error: error.message });
+  res.json({ token: data.session.access_token, user: { id: data.user.id, email: data.user.email } });
+});
+
+app.get("/auth/me", requireUser, (req, res) => {
+  res.json({ user: req.user });
+});
+
+app.post("/synapsys/analyze", requireUser, async (req, res) => {
   const t0 = Date.now();
   try {
     const { input, mode } = req.body;
