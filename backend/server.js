@@ -38,6 +38,13 @@ const app = express();
 
 app.use(express.json());
 
+app.use(express.static("public"));
+
+app.get("/", (req, res) => {
+  return res.sendFile(path.resolve("public/index.html"));
+});
+
+
 app.use(
   cors({
     origin: [
@@ -306,9 +313,6 @@ const runtimeConfig = {
 //  ROUTES — público
 // ════════════════════════════════════════════════════════
 
-app.get("/", (req, res) => {
-  res.json({ message: "Synapsys AI backend online" });
-});
 
 app.get("/health", (req, res) => {
   res.json({
