@@ -1,115 +1,41 @@
-import { useState } from "react";
-import ReactMarkdown from "react-markdown";
+import './App.css'
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import Pricing from './pages/Pricing'
+import Signup from './pages/Signup'
+import Checkout from './pages/Checkout'
+import Success from './pages/Success'
 
-function App() {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // 🔥 pega variável do Vercel
-  const API_URL =
-    import.meta.env.VITE_API_URL ||
-    "https://ai.insightdisc.com";
-
-  console.log("API_URL FRONT:", API_URL);
-
-  const sendMessage = async () => {
-    if (!input) return;
-
-    const userMessage = { role: "user", content: input };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setLoading(true);
-
-    try {
-      const res = await fetch(`${API_URL}/synapsys/analyze`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ input }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Erro HTTP: " + res.status);
-      }
-
-      const data = await res.json();
-
-      console.log("RESPOSTA API:", data);
-
-      const aiMessage = {
-        role: "ai",
-        content:
-          data.response ||
-          data.details ||
-          "A IA respondeu, mas sem conteúdo.",
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
-      console.error("ERRO FETCH:", error);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "ai",
-          content:
-            "Erro de conexão com o servidor. Verifique API_URL ou backend.",
-        },
-      ]);
-    }
-
-    setLoading(false);
-  };
-
+function Landing() {
   return (
-    <div style={{ padding: 20, fontFamily: "Arial" }}>
-      <h1>Synapsys AI</h1>
-
-      <div
-        style={{
-          border: "1px solid #ccc",
-          borderRadius: 10,
-          padding: 20,
-          height: 400,
-          overflowY: "auto",
-          marginBottom: 20,
-        }}
-      >
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            style={{
-              marginBottom: 10,
-              textAlign: msg.role === "user" ? "right" : "left",
-            }}
-          >
-            <strong>{msg.role === "user" ? "Você" : "Synapsys"}:</strong>
-            {msg.role === "ai" ? (
-              <ReactMarkdown>{msg.content}</ReactMarkdown>
-            ) : (
-              <div>{msg.content}</div>
-            )}
-          </div>
-        ))}
+    <div style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#030a12',color:'#c8eeff',fontFamily:'Inter,system-ui,sans-serif'}}>
+      <div style={{width:'100%',maxWidth:900,padding:40,textAlign:'center'}}>
+        <h1 style={{fontSize:56,marginBottom:16}}>Synapsys AI</h1>
+        <p style={{fontSize:20,opacity:.82,marginBottom:28}}>
+          Landing oficial da Synapsys AI
+        </p>
+        <div style={{display:'flex',gap:16,justifyContent:'center',flexWrap:'wrap'}}>
+          <Link to="/pricing?source=synapsys&plan=premium" style={{padding:'14px 20px',border:'1px solid #4cc9f0',borderRadius:10,color:'#c8eeff',textDecoration:'none'}}>
+            Ver planos
+          </Link>
+          <a href="/synapsys_v5.html" style={{padding:'14px 20px',border:'1px solid #30f0c0',borderRadius:10,color:'#c8eeff',textDecoration:'none'}}>
+            Abrir V5
+          </a>
+        </div>
       </div>
-
-      <input
-        style={{ width: "70%", padding: 10 }}
-        placeholder="Digite sua mensagem..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-      />
-
-      <button onClick={sendMessage} style={{ padding: 10, marginLeft: 10 }}>
-        Enviar
-      </button>
-
-      {loading && <p>Synapsys pensando...</p>}
     </div>
-  );
+  )
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/chat/signup" element={<Signup />} />
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/checkout/success" element={<Success />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
