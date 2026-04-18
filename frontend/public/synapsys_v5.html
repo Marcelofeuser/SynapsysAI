@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SynapsysAI</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#030a12;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100vh;overflow:hidden;display:flex;}
+
+/* ── LEFT SIDEBAR ── */
+.left-sidebar{width:270px;flex-shrink:0;background:rgba(5,15,28,0.95);border-right:0.5px solid rgba(80,200,255,0.1);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.ls-header{padding:14px 14px 10px;border-bottom:0.5px solid rgba(80,200,255,0.08);}
+.ls-logo{font-size:10px;color:rgba(80,180,220,0.35);letter-spacing:0.12em;margin-bottom:10px;}
+.ls-input-wrap{display:flex;flex-direction:column;gap:6px;}
+.ls-textarea{background:rgba(8,35,65,0.9);border:0.5px solid rgba(80,200,255,0.35);border-radius:8px;padding:8px 10px;font-size:12px;color:#c8eeff;font-family:inherit;outline:none;resize:none;height:58px;}
+.ls-textarea:focus{border-color:rgba(80,200,255,0.8);}
+.ls-textarea::placeholder{color:rgba(150,210,255,0.3);}
+.ls-send{background:rgba(20,80,140,0.7);border:0.5px solid rgba(80,200,255,0.45);border-radius:7px;color:#80d8ff;font-size:11px;padding:5px 10px;cursor:pointer;font-family:inherit;letter-spacing:0.03em;}
+.ls-send:hover{background:rgba(30,110,190,0.85);}
+
+/* Feed — flex column normal, newest prepended, scrolls from top */
+.ls-feed-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.ls-feed{
+  flex:1;overflow-y:auto;
+  display:flex;flex-direction:column;
+  padding:10px 10px 6px;gap:6px;
+  scrollbar-width:thin;scrollbar-color:rgba(80,200,255,0.1) transparent;
+}
+.ls-feed::-webkit-scrollbar{width:3px;}
+.ls-feed::-webkit-scrollbar-thumb{background:rgba(80,200,255,0.12);border-radius:2px;}
+
+.feed-item{padding:8px 10px;border-radius:8px;font-size:11px;line-height:1.55;border:0.5px solid transparent;flex-shrink:0;}
+.feed-item.q{background:rgba(26,80,160,0.2);border-color:rgba(80,160,255,0.22);color:rgba(120,190,255,0.88);}
+.feed-item.a{background:rgba(170,130,10,0.14);border-color:rgba(220,180,40,0.22);color:rgba(230,200,90,0.82);}
+.feed-expand{font-size:10px;color:rgba(80,160,200,0.4);cursor:pointer;display:inline-block;margin-top:3px;}
+.feed-expand:hover{color:rgba(80,200,255,0.7);}
+
+/* ── CENTER ── */
+.center{flex:1;position:relative;overflow:hidden;}
+#neural-canvas{position:absolute;inset:0;width:100%;height:100%;}
+#nodes-layer{position:absolute;inset:0;pointer-events:none;}
+.hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:10px;color:rgba(80,160,200,0.18);letter-spacing:0.07em;pointer-events:none;}
+
+/* ── RIGHT SIDEBAR ── */
+.right-sidebar{width:210px;flex-shrink:0;background:rgba(5,15,28,0.95);border-left:0.5px solid rgba(80,200,255,0.1);display:flex;flex-direction:column;height:100vh;overflow:hidden;padding:14px 12px 0;}
+.new-brain-btn{background:linear-gradient(135deg,rgba(80,140,220,0.22),rgba(30,200,160,0.18));border:0.5px solid rgba(80,200,255,0.45);border-radius:10px;padding:11px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:all 0.2s;margin-bottom:8px;}
+.new-brain-btn:hover{border-color:rgba(80,200,255,0.75);background:linear-gradient(135deg,rgba(80,140,220,0.32),rgba(30,200,160,0.26));}
+.brain-icon-wrap{width:30px;height:30px;border-radius:50%;flex-shrink:0;background:#0d1a2e;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px 3px rgba(80,200,255,0.3);}
+.brain-dot{width:9px;height:9px;border-radius:50%;background:#50c8ff;box-shadow:0 0 7px 2px rgba(80,200,255,0.7);animation:core-pulse 2.2s infinite;}
+@keyframes core-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.8);}}
+.nb-label{font-size:12px;color:#80d8ff;font-weight:500;}
+.nb-sub{font-size:10px;color:rgba(80,160,200,0.4);}
+.rs-section{font-size:10px;color:rgba(80,180,220,0.28);letter-spacing:0.09em;padding:6px 2px 3px;}
+.rs-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;transition:background 0.15s;border:0.5px solid transparent;color:rgba(130,195,230,0.5);font-size:12px;}
+.rs-item:hover{background:rgba(20,80,140,0.2);border-color:rgba(80,200,255,0.12);color:rgba(130,195,230,0.8);}
+.rs-item-note{font-size:9px;color:rgba(80,130,160,0.32);margin-left:auto;}
+.rs-divider{height:0.5px;background:rgba(80,200,255,0.07);margin:8px 0;}
+.recent-item{padding:6px 8px;border-radius:6px;cursor:pointer;transition:background 0.15s;border:0.5px solid transparent;margin-bottom:2px;}
+.recent-item:hover{background:rgba(20,80,140,0.18);border-color:rgba(80,200,255,0.1);}
+.ri-name{font-size:11px;color:rgba(120,190,225,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ri-date{font-size:10px;color:rgba(80,140,180,0.3);margin-top:1px;}
+.rs-spacer{flex:1;}
+.rs-coming{font-size:9px;color:rgba(80,130,160,0.28);padding:2px 2px 10px;font-style:italic;}
+
+/* Login button bottom */
+.login-area{
+  border-top:0.5px solid rgba(80,200,255,0.08);
+  padding:10px 0;position:relative;
+}
+.login-btn{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 8px;border-radius:8px;cursor:pointer;
+  transition:background 0.15s;border:0.5px solid transparent;width:100%;
+  background:none;
+}
+.login-btn:hover{background:rgba(20,80,140,0.2);border-color:rgba(80,200,255,0.12);}
+.login-avatar{
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  background:rgba(26,80,160,0.4);
+  border:0.5px solid rgba(80,200,255,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:#80d8ff;font-weight:500;
+}
+.login-info{flex:1;text-align:left;}
+.login-name{font-size:12px;color:rgba(130,195,230,0.7);}
+.login-email{font-size:10px;color:rgba(80,140,180,0.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+.login-arrow{font-size:10px;color:rgba(80,160,200,0.3);}
+
+/* Login menu popup */
+.login-menu{
+  position:absolute;bottom:calc(100% + 4px);left:0;right:0;
+  background:rgba(8,22,40,0.98);
+  border:0.5px solid rgba(80,200,255,0.18);
+  border-radius:10px;
+  padding:8px 0;
+  display:none;
+  z-index:100;
+  box-shadow:0 -8px 32px rgba(0,0,0,0.4);
+}
+.login-menu.open{display:block;}
+.lm-user{padding:10px 14px 8px;border-bottom:0.5px solid rgba(80,200,255,0.08);margin-bottom:4px;}
+.lm-name{font-size:12px;color:rgba(130,195,230,0.8);font-weight:500;}
+.lm-email{font-size:10px;color:rgba(80,140,180,0.45);margin-top:1px;}
+.lm-item{
+  display:flex;align-items:center;gap:9px;
+  padding:7px 14px;font-size:12px;
+  color:rgba(120,185,225,0.6);cursor:pointer;
+  transition:background 0.12s;
+}
+.lm-item:hover{background:rgba(20,80,140,0.2);color:rgba(130,195,230,0.9);}
+.lm-icon{font-size:13px;width:18px;text-align:center;}
+.lm-divider{height:0.5px;background:rgba(80,200,255,0.07);margin:4px 0;}
+.lm-item.danger{color:rgba(220,90,90,0.6);}
+.lm-item.danger:hover{background:rgba(200,50,50,0.1);color:rgba(240,120,120,0.9);}
+
+/* ── NODE BUBBLES ── */
+.node-bubble{position:absolute;transform:translate(-50%,-50%);pointer-events:all;}
+.node-glow{border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center;}
+.node-core{border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);animation:core-pulse 2.5s infinite;}
+.node-text{position:absolute;width:178px;font-size:12px;line-height:1.5;color:#c8eeff;text-align:left;transform:translateX(-50%);left:50%;padding:9px 11px;background:rgba(5,22,42,0.92);border:0.5px solid rgba(80,200,255,0.2);border-radius:10px;pointer-events:all;}
+.node-text.above{bottom:calc(100% + 12px);}
+.node-text.below{top:calc(100% + 12px);}
+.node-ellipsis{color:rgba(80,160,200,0.45);font-size:10px;display:block;margin-top:2px;}
+.node-actions{display:flex;gap:5px;margin-top:7px;padding-top:6px;border-top:0.5px solid rgba(80,200,255,0.1);}
+.na-btn{background:none;border:0.5px solid rgba(80,200,255,0.18);border-radius:5px;color:rgba(100,180,220,0.55);font-size:10px;padding:3px 6px;cursor:pointer;font-family:inherit;transition:all 0.15s;}
+.na-btn:hover{background:rgba(20,80,140,0.3);color:#80d8ff;border-color:rgba(80,200,255,0.4);}
+.na-btn.active-pos{color:#30f0c0;border-color:#30f0c0;}
+.na-btn.active-neg{color:#f05050;border-color:#f05050;}
+.na-btn.copied{color:#30f0c0;border-color:#30f0c0;}
+.node-q-label{position:absolute;width:165px;font-size:11px;color:rgba(100,170,210,0.6);font-style:italic;text-align:center;transform:translateX(-50%);left:50%;pointer-events:none;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;}
+.node-q-label.above{bottom:calc(100% + 10px);}
+.node-q-label.below{top:calc(100% + 10px);}
+.node-input-wrap{position:absolute;width:192px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;}
+.node-input-wrap.above{bottom:calc(100% + 12px);}
+.node-input-wrap.below{top:calc(100% + 12px);}
+.node-input{width:100%;background:rgba(8,35,65,0.9);border:0.5px solid rgba(80,200,255,0.4);border-radius:10px;padding:8px 10px;font-size:12px;color:#c8eeff;font-family:inherit;outline:none;resize:none;height:52px;}
+.node-input:focus{border-color:rgba(80,200,255,0.85);}
+.node-input::placeholder{color:rgba(150,210,255,0.3);}
+.node-send{background:rgba(20,80,140,0.75);border:0.5px solid rgba(80,200,255,0.5);border-radius:8px;color:#80d8ff;font-size:11px;padding:5px 14px;cursor:pointer;font-family:inherit;letter-spacing:0.03em;}
+.node-send:hover{background:rgba(30,110,190,0.85);}
+.node-send:disabled{opacity:0.3;cursor:default;}
+.synapse-flash{position:absolute;border-radius:50%;pointer-events:none;animation:flash-out 0.5s forwards;transform:translate(-50%,-50%);}
+@keyframes flash-out{0%{opacity:1;transform:translate(-50%,-50%) scale(0.2);}50%{opacity:0.85;transform:translate(-50%,-50%) scale(1);}100%{opacity:0;transform:translate(-50%,-50%) scale(1.8);}}
+.thinking-ring{position:absolute;border-radius:50%;pointer-events:none;border:1.5px solid rgba(80,200,255,0.55);transform:translate(-50%,-50%);animation:ring-expand 0.8s infinite;}
+@keyframes ring-expand{0%{opacity:0.9;transform:translate(-50%,-50%) scale(0.4);}100%{opacity:0;transform:translate(-50%,-50%) scale(2.4);}}
+</style>
+</head>
+<body>
+
+<!-- LEFT -->
+<div class="left-sidebar">
+  <div class="ls-header">
+    <div class="ls-logo">SYNAPSYS AI</div>
+    <div class="ls-input-wrap">
+      <textarea class="ls-textarea" id="ls-input" placeholder="faça sua pergunta..."></textarea>
+      <button class="ls-send" id="ls-send-btn">disparar sinapse ↗</button>
+    </div>
+  </div>
+  <div class="ls-feed-wrap">
+    <div class="ls-feed" id="ls-feed"></div>
+  </div>
+</div>
+
+<!-- CENTER -->
+<div class="center" id="center">
+  <canvas id="neural-canvas"></canvas>
+  <div id="nodes-layer"></div>
+  <div class="hint">sinapses crescem sempre para frente</div>
+</div>
+
+<!-- RIGHT -->
+<div class="right-sidebar">
+  <button class="new-brain-btn" onclick="newBrain()">
+    <div class="brain-icon-wrap"><div class="brain-dot"></div></div>
+    <div><div class="nb-label">Novo Cérebro</div><div class="nb-sub">nova sessão</div></div>
+  </button>
+
+  <div class="rs-section">NAVEGAÇÃO</div>
+  <div class="rs-item"><span>💬</span>Conversas<span class="rs-item-note">em breve</span></div>
+  <div class="rs-item"><span>📁</span>Projetos<span class="rs-item-note">em breve</span></div>
+  <div class="rs-item"><span>🔍</span>Procurar<span class="rs-item-note">em breve</span></div>
+
+  <div class="rs-divider"></div>
+  <div class="rs-section">CÉREBROS RECENTES</div>
+  <div id="recent-list">
+    <div class="recent-item"><div class="ri-name">Perfil D/I em liderança</div><div class="ri-date">hoje</div></div>
+    <div class="recent-item"><div class="ri-name">Comunicação com perfis C</div><div class="ri-date">ontem</div></div>
+    <div class="recent-item"><div class="ri-name">Gestão de equipe diversa</div><div class="ri-date">12 abr</div></div>
+  </div>
+  <div class="rs-coming">integração Supabase em breve</div>
+
+  <div class="rs-spacer"></div>
+
+  <!-- Login area -->
+  <div class="login-area">
+    <div class="login-menu" id="login-menu">
+      <div class="lm-user">
+        <div class="lm-name">Marcelo Feuser</div>
+        <div class="lm-email">marcelofeuser.go@gmail.com</div>
+      </div>
+      <div class="lm-item"><span class="lm-icon">⚙️</span>Configurações</div>
+      <div class="lm-item"><span class="lm-icon">🌐</span>Idioma</div>
+      <div class="lm-item"><span class="lm-icon">❓</span>Receber ajuda</div>
+      <div class="lm-divider"></div>
+      <div class="lm-item"><span class="lm-icon">📋</span>Ver todos os planos</div>
+      <div class="lm-item"><span class="lm-icon">ℹ️</span>Saiba mais</div>
+      <div class="lm-divider"></div>
+      <div class="lm-item danger"><span class="lm-icon">↪</span>Sair</div>
+    </div>
+    <button class="login-btn" id="login-btn" onclick="toggleMenu()">
+      <div class="login-avatar">MF</div>
+      <div class="login-info">
+        <div class="login-name">Marcelo Feuser</div>
+        <div class="login-email">marcelofeuser.go@gmail.com</div>
+      </div>
+      <span class="login-arrow">⌃</span>
+    </button>
+  </div>
+</div>
+
+<script>
+const center=document.getElementById('center');
+const canvas=document.getElementById('neural-canvas');
+const layer=document.getElementById('nodes-layer');
+const ctx=canvas.getContext('2d');
+const lsFeed=document.getElementById('ls-feed');
+
+let W,H;
+function resize(){W=center.clientWidth;H=center.clientHeight;canvas.width=W;canvas.height=H;}
+resize();window.addEventListener('resize',resize);
+
+// Login menu
+function toggleMenu(){
+  const m=document.getElementById('login-menu');
+  m.classList.toggle('open');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.login-area')) document.getElementById('login-menu').classList.remove('open');
+});
+
+const allNodes=[],connections=[],particles=[],ambients=[];
+for(let i=0;i<20;i++){
+  ambients.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*2+0.8,vx:(Math.random()-0.5)*0.18,vy:(Math.random()-0.5)*0.18,phase:Math.random()*Math.PI*2,col:Math.random()>0.5?'26,111,187':'13,158,120'});
+}
+
+let frontierAngle=Math.random()*Math.PI*2;
+const OVERLAP_DIST=190;
+const MAX_CHARS=90; // chars before truncating in bubble
+
+function truncate(text,max){
+  const plain=text.replace(/<[^>]+>/g,'');
+  if(plain.length<=max) return{short:plain,full:plain,cut:false};
+  return{short:plain.slice(0,max).trimEnd(),full:plain,cut:true};
+}
+
+function directedPos(fx,fy){
+  const spread=Math.PI/2.2;
+  for(let a=0;a<100;a++){
+    const angle=frontierAngle+(Math.random()-0.5)*spread*(1+a*0.03);
+    const dist=165+Math.random()*100;
+    const x=fx+Math.cos(angle)*dist,y=fy+Math.sin(angle)*dist;
+    const m=90;
+    if(x<m||x>W-m||y<m||y>H-m) continue;
+    let ok=true;
+    for(const n of allNodes){const dx=n.x-x,dy=n.y-y;if(Math.sqrt(dx*dx+dy*dy)<180){ok=false;break;}}
+    if(ok){frontierAngle=Math.atan2(y-fy,x-fx)+(Math.random()-0.5)*0.2;return{x,y};}
+  }
+  frontierAngle+=Math.PI*0.45;
+  const m=95;return{x:m+Math.random()*(W-m*2),y:m+Math.random()*(H-m*2.5)};
+}
+
+function textSide(y,size){return(y+size+100)>H?'above':'below';}
+
+function checkOverlaps(){
+  for(let i=0;i<allNodes.length-1;i++){
+    const n=allNodes[i];if(n.fading)continue;
+    for(let j=i+1;j<allNodes.length;j++){
+      const m=allNodes[j];const dx=n.x-m.x,dy=n.y-m.y;
+      if(Math.sqrt(dx*dx+dy*dy)<OVERLAP_DIST){fadeNode(n);break;}
+    }
+  }
+}
+function fadeNode(nd){
+  if(nd.fading||!nd.el)return;nd.fading=true;
+  nd.el.style.transition='opacity 0.08s';nd.el.style.opacity='0.4';
+  setTimeout(()=>{if(!nd.el)return;nd.el.style.transition='opacity 3.5s';nd.el.style.opacity='0';setTimeout(()=>{nd.el&&nd.el.remove();},3600);},100);
+}
+
+function flash(x,y,color){
+  const f=document.createElement('div');f.className='synapse-flash';
+  f.style.cssText=`left:${x}px;top:${y}px;width:48px;height:48px;background:radial-gradient(circle,${color} 0%,transparent 70%);`;
+  center.appendChild(f);setTimeout(()=>f.remove(),600);
+}
+function rings(x,y){
+  const rs=[];
+  for(let i=0;i<3;i++){const r=document.createElement('div');r.className='thinking-ring';r.style.cssText=`left:${x}px;top:${y}px;width:40px;height:40px;animation-delay:${i*0.28}s;`;center.appendChild(r);rs.push(r);}
+  return rs;
+}
+function shoot(x1,y1,x2,y2,col,onDone){
+  const n=12;
+  for(let i=0;i<n;i++){
+    const delay=i*(800/n); // faster — 800ms spread instead of 1100
+    const jx=(Math.random()-0.5)*45,jy=(Math.random()-0.5)*45;
+    particles.push({x:x1,y:y1,tx:x2,ty:y2,mx:(x1+x2)/2+jx,my:(y1+y2)/2+jy,col,t:0,delay,size:Math.random()*3+1.5,done:false});
+  }
+  setTimeout(onDone,900); // faster callback
+}
+
+// Feed: newest on top — prepend each item
+function addFeed(type,text){
+  const item=document.createElement('div');
+  item.className=`feed-item ${type}`;
+  const plain=text.replace(/<[^>]+>/g,'');
+  const preview=plain.length>160?plain.slice(0,160).trimEnd():plain;
+  item.textContent=preview;
+  if(plain.length>160){
+    const more=document.createElement('span');
+    more.className='feed-expand';more.textContent='ver tudo';
+    let open=false;
+    more.addEventListener('click',()=>{
+      open=!open;
+      item.textContent=open?plain:preview;
+      item.appendChild(more);
+      more.textContent=open?'recolher':'ver tudo';
+    });
+    item.appendChild(more);
+  }
+  // Prepend = newest on top
+  lsFeed.insertBefore(item,lsFeed.firstChild);
+}
+
+function copyText(txt,btn){
+  navigator.clipboard?.writeText(txt.replace(/<[^>]+>/g,'')).catch(()=>{});
+  btn.textContent='✓';btn.classList.add('copied');
+  setTimeout(()=>{btn.textContent='copiar';btn.classList.remove('copied');},1400);
+}
+function makeActions(getRaw,onRetry){
+  const wrap=document.createElement('div');wrap.className='node-actions';
+  const cp=document.createElement('button');cp.className='na-btn';cp.textContent='copiar';cp.addEventListener('click',()=>copyText(getRaw(),cp));
+  const rt=document.createElement('button');rt.className='na-btn';rt.textContent='↺';rt.addEventListener('click',()=>onRetry(rt));
+  const pos=document.createElement('button');pos.className='na-btn';pos.textContent='👍';pos.addEventListener('click',()=>{pos.classList.toggle('active-pos');neg.classList.remove('active-neg');});
+  const neg=document.createElement('button');neg.className='na-btn';neg.textContent='👎';neg.addEventListener('click',()=>{neg.classList.toggle('active-neg');pos.classList.remove('active-pos');});
+  wrap.appendChild(cp);wrap.appendChild(rt);wrap.appendChild(pos);wrap.appendChild(neg);
+  return wrap;
+}
+
+const RESPONSES=[
+  "Seu perfil D/I combina velocidade de decisão com carisma. Em liderança, isso gera times que se movem rápido — o desafio é criar espaço para perfis S e C processarem antes de executar.",
+  "Perfis C precisam de dados, não entusiasmo. Compartilhe contexto com antecedência, seja preciso nos números e dê tempo de análise. Isso constrói credibilidade duradoura.",
+  "A sinapse D→S é a mais produtiva quando há respeito mútuo: D define a visão com urgência, S entrega com consistência. O conflito surge quando D pressiona sem escutar.",
+  "Desenvolvimento DISC não é mudar quem você é — é expandir o repertório. Um D que aprende a pausar antes de decidir não perde força: ganha precisão.",
+  "Equipes com diversidade de perfis são significativamente mais resilientes. Seu papel como D é criar clareza de direção — deixe o S sustentar o ritmo e o C garantir a qualidade.",
+  "Em negociação, perfis D/I têm vantagem natural na abertura. O risco é fechar antes de ouvir — a pergunta certa vale mais que o argumento certo.",
+];
+let rIdx=0,activeInputNode=null;
+
+function makeNode({x,y,type,text,isInput,questionText}){
+  const size=isInput?24:19;
+  const col=type==='q'?{glow:'rgba(26,111,187,0.2)',core:'#1a6fbb',ring:'#50c8ff'}:{glow:'rgba(13,158,120,0.18)',core:'#0d9e78',ring:'#30f0c0'};
+  const el=document.createElement('div');el.className='node-bubble';el.style.left=x+'px';el.style.top=y+'px';el.style.opacity='0';el.style.transition='opacity 0.45s';
+  const glow=document.createElement('div');glow.className='node-glow';glow.style.cssText=`width:${size*2}px;height:${size*2}px;background:${col.glow};box-shadow:0 0 ${isInput?32:18}px ${isInput?13:7}px ${col.ring};`;
+  const core=document.createElement('div');core.className='node-core';core.style.cssText=`width:${size*0.65}px;height:${size*0.65}px;background:${col.core};box-shadow:0 0 12px 5px ${col.ring};`;
+  glow.appendChild(core);el.appendChild(glow);
+  const side=textSide(y,size);
+  const nd={x,y,type,el,fading:false};
+
+  if(isInput){
+    const wrap=document.createElement('div');wrap.className=`node-input-wrap ${side}`;
+    const inp=document.createElement('textarea');inp.className='node-input';inp.placeholder='próxima pergunta...';
+    const btn=document.createElement('button');btn.className='node-send';btn.textContent='disparar ↗';
+    wrap.appendChild(inp);wrap.appendChild(btn);el.appendChild(wrap);
+    nd.inp=inp;nd.btn=btn;
+    allNodes.push(nd);layer.appendChild(el);
+    setTimeout(()=>{el.style.opacity='1';inp.focus();},50);
+    btn.addEventListener('click',()=>{const q=inp.value.trim();if(q)handleSend(nd,q);});
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();btn.click();}});
+
+  } else if(questionText){
+    const tr=truncate(questionText,80);
+    const ql=document.createElement('div');ql.className=`node-q-label ${side}`;ql.textContent=tr.short+(tr.cut?'…':'');
+    el.appendChild(ql);allNodes.push(nd);layer.appendChild(el);setTimeout(()=>el.style.opacity='1',50);
+
+  } else {
+    const tr=truncate(text,MAX_CHARS);
+    const tx=document.createElement('div');tx.className=`node-text ${side}`;
+    const body=document.createElement('span');body.textContent=tr.short;
+    tx.appendChild(body);
+    if(tr.cut){const e=document.createElement('span');e.className='node-ellipsis';e.textContent='… (completo na coluna esquerda)';tx.appendChild(e);}
+    let cur=text;
+    const actions=makeActions(()=>cur,()=>{
+      const nr=RESPONSES[(rIdx+1)%RESPONSES.length];rIdx++;cur=nr;
+      const tr2=truncate(nr,MAX_CHARS);body.textContent=tr2.short;
+      addFeed('a',nr);flash(x,y,'#30f0c0');
+    });
+    tx.appendChild(actions);el.appendChild(tx);
+    allNodes.push(nd);layer.appendChild(el);setTimeout(()=>el.style.opacity='1',50);
+  }
+  setTimeout(()=>checkOverlaps(),500);
+  return nd;
+}
+
+function handleSend(fromNode,question){
+  fromNode.btn.disabled=true;fromNode.inp.disabled=true;
+  fromNode.el.style.transition='opacity 0.4s';fromNode.el.style.opacity='0.28';
+  activeInputNode=null;
+
+  // Add Q to feed immediately (prepend = newest on top)
+  addFeed('q',question);
+
+  const rs=rings(fromNode.x,fromNode.y);
+  setTimeout(()=>{
+    rs.forEach(r=>r.remove());flash(fromNode.x,fromNode.y,'#50c8ff');
+    const qPos=directedPos(fromNode.x,fromNode.y);
+    connections.push({x1:fromNode.x,y1:fromNode.y,x2:qPos.x,y2:qPos.y,col:'26,111,187',a:0});
+    shoot(fromNode.x,fromNode.y,qPos.x,qPos.y,'#50c8ff',()=>{
+      makeNode({x:qPos.x,y:qPos.y,type:'q',text:'',isInput:false,questionText:question});
+      flash(qPos.x,qPos.y,'#50c8ff');
+      const aPos=directedPos(qPos.x,qPos.y);
+      setTimeout(()=>{
+        connections.push({x1:qPos.x,y1:qPos.y,x2:aPos.x,y2:aPos.y,col:'13,158,120',a:0});
+        flash(qPos.x,qPos.y,'#30f0c0');
+        const resp=RESPONSES[rIdx%RESPONSES.length];rIdx++;
+        shoot(qPos.x,qPos.y,aPos.x,aPos.y,'#30f0c0',()=>{
+          makeNode({x:aPos.x,y:aPos.y,type:'a',text:resp,isInput:false});
+          flash(aPos.x,aPos.y,'#30f0c0');
+          addFeed('a',resp);
+          setTimeout(()=>{
+            const nPos=directedPos(aPos.x,aPos.y);
+            connections.push({x1:aPos.x,y1:aPos.y,x2:nPos.x,y2:nPos.y,col:'26,111,187',a:0});
+            shoot(aPos.x,aPos.y,nPos.x,nPos.y,'#50c8ff',()=>{
+              const next=makeNode({x:nPos.x,y:nPos.y,type:'q',text:'',isInput:true});
+              flash(nPos.x,nPos.y,'#50c8ff');activeInputNode=next;
+              // Add to recent
+              const rec=document.getElementById('recent-list');
+              const ri=document.createElement('div');ri.className='recent-item';
+              ri.innerHTML=`<div class="ri-name">${question.slice(0,30)}${question.length>30?'…':''}</div><div class="ri-date">agora</div>`;
+              rec.insertBefore(ri,rec.firstChild);
+            });
+          },700);
+        });
+      },600);
+    });
+  },900);
+}
+
+function newBrain(){
+  allNodes.length=0;connections.length=0;particles.length=0;
+  activeInputNode=null;rIdx=0;layer.innerHTML='';lsFeed.innerHTML='';
+  frontierAngle=Math.random()*Math.PI*2;
+  const nd=makeNode({x:W/2,y:H/2,type:'q',text:'',isInput:true});activeInputNode=nd;
+}
+
+document.getElementById('ls-send-btn').addEventListener('click',()=>{
+  const val=document.getElementById('ls-input').value.trim();if(!val)return;
+  if(activeInputNode){activeInputNode.inp.value=val;document.getElementById('ls-input').value='';handleSend(activeInputNode,val);}
+  else{document.getElementById('ls-input').value='';const nd=makeNode({x:W/2,y:H/2,type:'q',text:'',isInput:true});nd.inp.value=val;setTimeout(()=>handleSend(nd,val),100);}
+});
+document.getElementById('ls-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();document.getElementById('ls-send-btn').click();}});
+
+let frame=0;
+function loop(){
+  ctx.clearRect(0,0,W,H);frame++;
+  ambients.forEach(n=>{n.x+=n.vx;n.y+=n.vy;if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;});
+  for(let i=0;i<ambients.length;i++){for(let j=i+1;j<ambients.length;j++){const a=ambients[i],b=ambients[j];const dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy);if(d<100){ctx.strokeStyle=`rgba(30,90,150,${(1-d/100)*0.09})`;ctx.lineWidth=0.4;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}}
+  ambients.forEach(n=>{const p=(Math.sin(frame*0.04+n.phase)+1)/2;ctx.beginPath();ctx.arc(n.x,n.y,n.r*(0.7+p*0.5),0,Math.PI*2);ctx.fillStyle=`rgba(${n.col},${0.13+p*0.17})`;ctx.fill();});
+  connections.forEach(c=>{if(c.a<0.48)c.a+=0.013;ctx.strokeStyle=`rgba(${c.col},${c.a})`;ctx.lineWidth=0.8;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(c.x1,c.y1);ctx.lineTo(c.x2,c.y2);ctx.stroke();ctx.setLineDash([]);});
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];if(p.done){particles.splice(i,1);continue;}
+    p.delay-=16;if(p.delay>0)continue;
+    p.t=Math.min(p.t+0.05,1); // faster particle speed
+    const t=p.t,mt=1-t;
+    const x=mt*mt*p.x+2*mt*t*p.mx+t*t*p.tx;
+    const y=mt*mt*p.y+2*mt*t*p.my+t*t*p.ty;
+    const alpha=t<0.75?1:(1-t)/0.25;
+    ctx.beginPath();ctx.arc(x,y,p.size,0,Math.PI*2);ctx.fillStyle=p.col;ctx.globalAlpha=alpha*0.88;ctx.fill();ctx.globalAlpha=1;
+    if(p.t>=1)p.done=true;
+  }
+  requestAnimationFrame(loop);
+}
+
+const nd=makeNode({x:W/2,y:H/2,type:'q',text:'',isInput:true});
+activeInputNode=nd;
+loop();
+</script>
+</body>
+</html>
