@@ -15,6 +15,7 @@ export default function Admin() {
   const [logged, setLogged] = useState(false)
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
+  const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
 
   function handleLogin() {
@@ -25,15 +26,6 @@ export default function Admin() {
       setError('Credenciais inválidas.')
     }
   }
-
-  const inp = (val, set, type, placeholder) => (
-    <input
-      type={type} value={val} placeholder={placeholder}
-      onChange={e => set(e.target.value)}
-      onKeyDown={e => e.key === 'Enter' && handleLogin()}
-      style={{ width: '100%', background: 'rgba(8,35,65,0.9)', border: '0.5px solid rgba(80,200,255,0.3)', borderRadius: 9, padding: '11px 14px', fontSize: 13, color: '#c8eeff', fontFamily: 'inherit', outline: 'none', marginBottom: 12 }}
-    />
-  )
 
   if (!logged) return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: C.bg, fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
@@ -48,8 +40,23 @@ export default function Admin() {
           <p style={{ fontSize: 12, color: C.textFaint }}>Acesso restrito · Super Admin</p>
         </div>
         <div style={{ background: '#050f1c', border: '0.5px solid rgba(80,200,255,0.2)', borderRadius: 16, padding: '2rem' }}>
-          {inp(email, setEmail, 'email', 'E-mail admin')}
-          {inp(pass, setPass, 'password', 'Senha')}
+          <input
+            type="email" value={email} placeholder="E-mail admin"
+            onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            style={{ width: '100%', background: 'rgba(8,35,65,0.9)', border: '0.5px solid rgba(80,200,255,0.3)', borderRadius: 9, padding: '11px 14px', fontSize: 13, color: '#c8eeff', fontFamily: 'inherit', outline: 'none', marginBottom: 12 }}
+          />
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <input
+              type={showPass ? 'text' : 'password'} value={pass} placeholder="Senha"
+              onChange={e => setPass(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              style={{ width: '100%', background: 'rgba(8,35,65,0.9)', border: '0.5px solid rgba(80,200,255,0.3)', borderRadius: 9, padding: '11px 40px 11px 14px', fontSize: 13, color: '#c8eeff', fontFamily: 'inherit', outline: 'none' }}
+            />
+            <button onClick={() => setShowPass(p => !p)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(80,200,255,0.4)', fontSize: 16, lineHeight: 1, padding: 0 }}>
+              {showPass ? '🙈' : '👁'}
+            </button>
+          </div>
           {error && <p style={{ fontSize: 12, color: '#f05050', marginBottom: 12 }}>{error}</p>}
           <button onClick={handleLogin} style={{ width: '100%', padding: 12, borderRadius: 9, background: 'rgba(20,80,140,0.85)', border: '0.5px solid rgba(80,200,255,0.5)', color: C.blue, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>Entrar no painel →</button>
         </div>

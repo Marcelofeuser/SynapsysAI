@@ -50,7 +50,7 @@ export default function Landing() {
 
   useEffect(()=>{
     let ci=0,timeout
-    function next(){if(ci>=CONVS.length){ci=0;setChatMsgs([]);timeout=setTimeout(next,1000);return}const c=CONVS[ci];if(c.role==='ai'){setTyping(true);timeout=setTimeout(()=>{setTyping(false);setChatMsgs(p=>[...p,c]);ci++;timeout=setTimeout(next,2400)},1300)}else{setChatMsgs(p=>[...p,c]);ci++;timeout=setTimeout(next,900)}}
+    function next(){if(ci>=CONVS.length){ci=0;setChatMsgs([]);timeout=setTimeout(next,500);return}const c=CONVS[ci];if(c.role==='ai'){setTyping(true);timeout=setTimeout(()=>{setTyping(false);setChatMsgs(p=>[...p,c]);ci++;timeout=setTimeout(next,1200)},650)}else{setChatMsgs(p=>[...p,c]);ci++;timeout=setTimeout(next,450)}}
     timeout=setTimeout(next,600); return()=>clearTimeout(timeout)
   },[])
 
@@ -87,7 +87,7 @@ export default function Landing() {
               <span style={{fontSize:10,color:C.textFaint,marginLeft:'auto'}}>sinapse ativa</span>
             </div>
             <div style={{padding:12,display:'flex',flexDirection:'column',gap:8,minHeight:200}}>
-              {chatMsgs.map((m,i)=>(
+              {[...chatMsgs].slice(-4).map((m,i)=>(
                 <div key={i} style={{display:'flex',gap:7,flexDirection:m.role==='user'?'row-reverse':'row',alignItems:'flex-start'}}>
                   <div style={{width:22,height:22,borderRadius:'50%',background:m.role==='ai'?'rgba(26,111,187,0.35)':'rgba(13,158,120,0.25)',border:`0.5px solid ${m.role==='ai'?'rgba(80,200,255,0.3)':'rgba(48,240,192,0.25)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:600,color:m.role==='ai'?C.blue:C.green,flexShrink:0}}>{m.role==='ai'?'S':'U'}</div>
                   <div style={{fontSize:11,lineHeight:1.55,padding:'7px 10px',borderRadius:m.role==='ai'?'9px 9px 9px 2px':'9px 9px 2px 9px',maxWidth:210,background:m.role==='ai'?'rgba(26,111,187,0.18)':'rgba(13,158,120,0.18)',color:m.role==='ai'?'rgba(180,220,255,0.88)':'rgba(140,240,200,0.88)',border:`0.5px solid ${m.role==='ai'?'rgba(80,200,255,0.18)':'rgba(48,240,192,0.18)'}`}}>{m.text}</div>
