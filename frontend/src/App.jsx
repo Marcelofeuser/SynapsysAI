@@ -5,6 +5,7 @@ import Pricing from './pages/Pricing'
 import Signup from './pages/Signup'
 import Checkout from './pages/Checkout'
 import Success from './pages/Success'
+import Admin from './pages/Admin'
 
 export default function App() {
   return (
@@ -14,7 +15,8 @@ export default function App() {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/chat/signup" element={<Signup />} />
         <Route path="/checkout" element={<Checkout />} />
-        <Route path="/checkout/success" element={<Checkout />} />
+        <Route path="/checkout/success" element={<Success />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </BrowserRouter>
   )
