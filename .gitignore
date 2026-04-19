@@ -1,12 +1,16 @@
 node_modules/
 backend/node_modules/
+.vercel/
 
 .env
 backend/.env
 frontend/synapsys-tests/.env
+login.json
 
 dist/
 .DS_Store
+*.bak
+*.pdf
 
 playwright-report/
 test-results/
