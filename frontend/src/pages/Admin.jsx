@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const ADMIN_USER = 'admin@synapsys.ai'
+const ADMIN_USER = 'admin@synapsys.insightdisc.com'
 const ADMIN_PASS = 'Syn@2025#Admin'
 
 const C = {
