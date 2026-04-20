@@ -607,5 +607,39 @@ void syncBackendStatus();
 window.setInterval(()=>{void syncBackendStatus({silent:true});},30000);
 loop();
 </script>
+
+<script>
+function renderResponse(res) {
+  const container = document.createElement("div");
+
+  const text = document.createElement("div");
+  text.innerHTML = (res.output || "").replace(/\n/g, "<br>");
+  container.appendChild(text);
+
+  if (res.sources && res.sources.length > 0) {
+    const sources = document.createElement("div");
+    sources.style.marginTop = "10px";
+    sources.style.fontSize = "12px";
+    sources.style.opacity = "0.7";
+
+    sources.innerHTML = "<b>Fontes:</b><br>";
+
+    res.sources.forEach(s => {
+      const link = document.createElement("a");
+      link.href = s.link;
+      link.target = "_blank";
+      link.style.display = "block";
+      link.style.color = "#4cc9f0";
+      link.innerText = "• " + s.title;
+      sources.appendChild(link);
+    });
+
+    container.appendChild(sources);
+  }
+
+  return container;
+}
+</script>
+
 </body>
 </html>
