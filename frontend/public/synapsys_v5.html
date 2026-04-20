@@ -225,6 +225,19 @@ const canvas=document.getElementById('neural-canvas');
 const layer=document.getElementById('nodes-layer');
 const ctx=canvas.getContext('2d');
 const lsFeed=document.getElementById('ls-feed');
+const statusNote=document.querySelector('.rs-coming');
+
+const queryParams=new URLSearchParams(window.location.search);
+const customApiBase=String(queryParams.get('api')||'').trim().replace(/\/+$/,'');
+const runtimeHost=String(window.location.hostname||'').trim().toLowerCase();
+const isLocalHost=runtimeHost==='localhost'||runtimeHost==='127.0.0.1';
+const API_BASE=customApiBase||(
+  isLocalHost
+    ? 'http://localhost:4000'
+    : 'https://ai.insightdisc.com'
+);
+const API_HEALTH_URL=`${API_BASE}/health`;
+const API_ANALYZE_URL=`${API_BASE}/api/synapsys/general`;
 
 let W,H;
 function resize(){W=center.clientWidth;H=center.clientHeight;canvas.width=W;canvas.height=H;}
@@ -355,6 +368,112 @@ const RESPONSES=[
 ];
 let rIdx=0,activeInputNode=null;
 
+function fallbackResponse(){
+  const resp=RESPONSES[rIdx%RESPONSES.length];
+  rIdx+=1;
+  return resp;
+}
+
+function setBackendStatus(state,message=''){
+  if(!statusNote)return;
+  if(state==='online'){
+    statusNote.textContent=message||'backend Synapsys online';
+    statusNote.style.color='rgba(48,240,192,0.56)';
+    return;
+  }
+  if(state==='error'){
+    statusNote.textContent=message||'backend Synapsys indisponível';
+    statusNote.style.color='rgba(240,110,110,0.68)';
+    return;
+  }
+  statusNote.textContent=message||'conectando backend Synapsys...';
+  statusNote.style.color='rgba(120,180,210,0.34)';
+}
+
+function extractResponseText(payload){
+  if(!payload||typeof payload!=='object')return '';
+  const candidates=[
+    payload.output,
+    payload.response,
+    payload.answer,
+    payload.text,
+    payload.content,
+    payload.message,
+    payload.data?.output,
+    payload.data?.response,
+    payload.data?.answer,
+    payload.data?.text,
+  ];
+  const first=candidates.find(item=>String(item||'').trim());
+  return String(first||'').trim();
+}
+
+async function syncBackendStatus({silent=false}={}){
+  if(!silent)setBackendStatus('connecting',`checando backend em ${API_BASE.replace(/^https?:\/\//,'')}`);
+  try{
+    const controller=new AbortController();
+    const timeout=window.setTimeout(()=>controller.abort(),7000);
+    let res;
+    try{
+      res=await fetch(API_HEALTH_URL,{
+        method:'GET',
+        headers:{Accept:'application/json'},
+        signal:controller.signal,
+      });
+    }finally{
+      window.clearTimeout(timeout);
+    }
+    const payload=await res.json().catch(()=>null);
+    if(res.ok&&String(payload?.status||'').trim().toLowerCase()==='ok'){
+      setBackendStatus('online',`backend online • ${API_BASE.replace(/^https?:\/\//,'')}`);
+      return true;
+    }
+  }catch{}
+  setBackendStatus('error','backend offline • usando fallback local quando necessário');
+  return false;
+}
+
+async function requestSynapsysAnswer(question){
+  try{
+    const controller=new AbortController();
+    const timeout=window.setTimeout(()=>controller.abort(),30000);
+    let res;
+    try{
+      res=await fetch(API_ANALYZE_URL,{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          Accept:'application/json',
+        },
+        body:JSON.stringify({
+          input:question,
+          force_web_search:true,
+        }),
+        signal:controller.signal,
+      });
+    }finally{
+      window.clearTimeout(timeout);
+    }
+
+    const payload=await res.json().catch(()=>null);
+    if(!res.ok){
+      throw new Error(String(payload?.message||payload?.error||`HTTP ${res.status}`).trim()||`HTTP ${res.status}`);
+    }
+
+    const text=extractResponseText(payload);
+    if(!text){
+      throw new Error('Resposta vazia da Synapsys.');
+    }
+
+    setBackendStatus('online',`backend online • ${API_BASE.replace(/^https?:\/\//,'')}`);
+    return text;
+  }catch(error){
+    console.error('[synapsys_v5] erro ao consultar backend:',error);
+    setBackendStatus('error','backend offline • fallback local ativo');
+    return fallbackResponse();
+  }
+}
+
 function makeNode({x,y,type,text,isInput,questionText}){
   const size=isInput?24:19;
   const col=type==='q'?{glow:'rgba(26,111,187,0.2)',core:'#1a6fbb',ring:'#50c8ff'}:{glow:'rgba(13,158,120,0.18)',core:'#0d9e78',ring:'#30f0c0'};
@@ -417,10 +536,12 @@ function handleSend(fromNode,question){
       makeNode({x:qPos.x,y:qPos.y,type:'q',text:'',isInput:false,questionText:question});
       flash(qPos.x,qPos.y,'#50c8ff');
       const aPos=directedPos(qPos.x,qPos.y);
-      setTimeout(()=>{
+      const thinking=rings(qPos.x,qPos.y);
+      setTimeout(async()=>{
         connections.push({x1:qPos.x,y1:qPos.y,x2:aPos.x,y2:aPos.y,col:'13,158,120',a:0});
         flash(qPos.x,qPos.y,'#30f0c0');
-        const resp=RESPONSES[rIdx%RESPONSES.length];rIdx++;
+        const resp=await requestSynapsysAnswer(question);
+        thinking.forEach(r=>r.remove());
         shoot(qPos.x,qPos.y,aPos.x,aPos.y,'#30f0c0',()=>{
           makeNode({x:aPos.x,y:aPos.y,type:'a',text:resp,isInput:false});
           flash(aPos.x,aPos.y,'#30f0c0');
@@ -481,6 +602,9 @@ function loop(){
 
 const nd=makeNode({x:W/2,y:H/2,type:'q',text:'',isInput:true});
 activeInputNode=nd;
+setBackendStatus('connecting');
+void syncBackendStatus();
+window.setInterval(()=>{void syncBackendStatus({silent:true});},30000);
 loop();
 </script>
 </body>
