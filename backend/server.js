@@ -1,10 +1,30 @@
 const { renderDiscReport } = require("./src/disc/renderDiscReport");
 const { loadDiscBase } = require("./src/knowledge/loadDiscBase");
+const {
+  addConversationMessage,
+  createConversation,
+  createProject,
+  deleteConversation,
+  deleteProject,
+  getConversation,
+  isMissingSynapsysTableError,
+  listConversations,
+  listProjects,
+  listRecentConversations,
+  searchWorkspace,
+  updateConversation,
+  updateProject,
+} = require("./src/synapsys/repository");
+const {
+  buildConversationTitle,
+  getRangeStart,
+  normalizeConversationFilter,
+  toPositiveInteger,
+} = require("./src/synapsys/utils");
 const cors = require("cors");
 const OpenAI = require("openai");
 const { loadAllPrompts, loadModePrompt } = require("./src/ai/loadPrompts");
 const express = require("express");
-const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
@@ -19,19 +39,146 @@ const Groq = require("groq-sdk");
 const Anthropic = require("@anthropic-ai/sdk");
 const { createClient } = require("@supabase/supabase-js");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const SYNAPSYS_SERVER_KEY = String(process.env.SYNAPSYS_SERVER_KEY || "").trim();
+
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function createRequestSupabaseClient(token) {
+  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  });
+}
+
+async function resolveUserFromRequest(req, { required = true } = {}) {
+  const authHeader = req.headers["authorization"];
+
+  if (!authHeader) {
+    if (!required) {
+      return { user: null, token: null };
+    }
+
+    const error = new Error("Token nao enviado");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    if (!required) {
+      return { user: null, token: null };
+    }
+
+    const authError = new Error("Token invalido ou expirado");
+    authError.statusCode = 401;
+    throw authError;
+  }
+
+  return { user, token };
+}
 
 async function requireUser(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader) return res.status(401).json({ error: "Token não enviado" });
-  const token = authHeader.replace("Bearer ", "");
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return res.status(401).json({ error: "Token inválido ou expirado" });
-  req.user = user;
+  try {
+    const { user, token } = await resolveUserFromRequest(req, { required: true });
+    req.user = user;
+    req.accessToken = token;
+    req.db = createRequestSupabaseClient(token);
+    next();
+  } catch (error) {
+    res.status(error.statusCode || 401).json({ error: error.message });
+  }
+}
+
+async function optionalUser(req, res, next) {
+  try {
+    const { user, token } = await resolveUserFromRequest(req, { required: false });
+    req.user = user;
+    req.accessToken = token;
+    req.db = token ? createRequestSupabaseClient(token) : null;
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+function requireSynapsysServerKey(req, res, next) {
+  const serverKey = String(req.headers["x-synapsys-key"] || "").trim();
+
+  if (!SYNAPSYS_SERVER_KEY || !serverKey || serverKey !== SYNAPSYS_SERVER_KEY) {
+    return res.status(401).json({ error: "Chave server-to-server invalida" });
+  }
+
   next();
+}
+
+function buildServerAnalyzePayload(body) {
+  const context = isPlainObject(body?.context) ? body.context : {};
+  const mode = typeof context.mode === "string" && context.mode.trim() ? context.mode.trim() : undefined;
+  const contextualData = { ...context };
+
+  delete contextualData.mode;
+  delete contextualData.conversationId;
+  delete contextualData.projectId;
+
+  const hasContext = Object.keys(contextualData).length > 0;
+  const input = hasContext
+    ? `${String(body?.input || "").trim()}\n\nContexto adicional (JSON):\n${JSON.stringify(contextualData, null, 2)}`
+    : body?.input;
+
+  return {
+    input,
+    mode,
+    conversationId:
+      typeof context.conversationId === "string" && context.conversationId.trim()
+        ? context.conversationId.trim()
+        : undefined,
+    projectId:
+      typeof context.projectId === "string" && context.projectId.trim()
+        ? context.projectId.trim()
+        : undefined,
+  };
+}
+
+function getWorkspaceFilter(req) {
+  const filter = normalizeConversationFilter(req.query.filter || req.query.period || "30d");
+  return {
+    filter,
+    rangeStart: getRangeStart(filter),
+    projectId: String(req.query.projectId || "").trim() || null,
+  };
+}
+
+function handleWorkspaceError(res, error, fallbackMessage) {
+  console.error("[synapsys-workspace]", error.message);
+
+  if (isMissingSynapsysTableError(error)) {
+    return res.status(503).json({
+      error: "As tabelas da Synapsys ainda nao foram criadas no banco.",
+      setupRequired: true,
+      migration: "backend/sql/20260420_synapsys_phase1.sql",
+    });
+  }
+
+  return res.status(error.statusCode || 500).json({
+    error: fallbackMessage,
+    details: error.message,
+  });
 }
 
 const app = express();
@@ -250,6 +397,88 @@ async function generateInsight(userInput, mode = "builder") {
   );
 }
 
+async function runSynapsysTurn({ input, mode = "builder", conversationId, projectId, user, db }) {
+  const startedAt = Date.now();
+  const normalizedInput = String(input || "").trim();
+  let conversation = null;
+  let persistenceEnabled = !!(user && db);
+  let persistenceWarning = null;
+
+  if (!normalizedInput) {
+    const error = new Error("Input e obrigatorio");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (persistenceEnabled) {
+    try {
+      if (conversationId) {
+        const updates = {
+          archivedAt: null,
+          lastOpenedAt: new Date().toISOString(),
+        };
+
+        if (projectId !== undefined) {
+          updates.projectId = projectId || null;
+        }
+
+        conversation = await updateConversation(db, user.id, conversationId, updates);
+      } else {
+        conversation = await createConversation(db, user.id, {
+          title: buildConversationTitle(normalizedInput),
+          projectId: projectId || null,
+        });
+      }
+
+      await addConversationMessage(db, conversation.id, "user", normalizedInput);
+    } catch (error) {
+      if (isMissingSynapsysTableError(error)) {
+        persistenceEnabled = false;
+        persistenceWarning = "Persistencia indisponivel ate a migracao SQL ser aplicada.";
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  try {
+    const { text, source } = await generateInsight(normalizedInput, mode || "builder");
+
+    if (persistenceEnabled && conversation) {
+      await addConversationMessage(db, conversation.id, "assistant", text);
+      conversation = await updateConversation(db, user.id, conversation.id, {
+        archivedAt: null,
+        lastOpenedAt: new Date().toISOString(),
+      });
+    }
+
+    trackRequest({
+      input: normalizedInput,
+      output: text,
+      source,
+      durationMs: Date.now() - startedAt,
+      error: false,
+    });
+
+    return {
+      conversation,
+      persistenceEnabled,
+      persistenceWarning,
+      response: text,
+      source,
+    };
+  } catch (error) {
+    trackRequest({
+      input: normalizedInput,
+      output: "",
+      source: "error",
+      durationMs: Date.now() - startedAt,
+      error: true,
+    });
+    throw error;
+  }
+}
+
 // ════════════════════════════════════════════════════════
 //  STATS — rastreamento em memória
 // ════════════════════════════════════════════════════════
@@ -375,44 +604,318 @@ app.post("/auth/login", async (req, res) => {
     return res.status(400).json({ error: "email e password são obrigatórios" });
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return res.status(401).json({ error: error.message });
-  res.json({ token: data.session.access_token, user: { id: data.user.id, email: data.user.email } });
+  res.json({
+    token: data.session.access_token,
+    refreshToken: data.session.refresh_token,
+    expiresAt: data.session.expires_at,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      name: data.user.user_metadata?.name || data.user.email?.split("@")[0] || "Usuario Synapsys",
+    },
+  });
 });
 
 app.get("/auth/me", requireUser, (req, res) => {
-  res.json({ user: req.user });
+  res.json({
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      name: req.user.user_metadata?.name || req.user.email?.split("@")[0] || "Usuario Synapsys",
+    },
+  });
 });
 
-app.post("/synapsys/analyze", requireUser, async (req, res) => {
-  const t0 = Date.now();
+app.post("/api/synapsys/general", optionalUser, async (req, res) => {
   try {
-    const { input, mode } = req.body;
-
-    if (!input) {
-      return res.status(400).json({ error: "Input é obrigatório" });
-    }
-
-    const { text, source } = await generateInsight(input, mode || "builder");
-    const durationMs = Date.now() - t0;
-
-    trackRequest({ input, output: text, source, durationMs, error: false });
+    const { input, mode, conversationId, projectId } = req.body;
+    const result = await runSynapsysTurn({
+      input,
+      mode,
+      conversationId,
+      projectId,
+      user: req.user,
+      db: req.db,
+    });
 
     return res.json({
       success: true,
-      source,
+      source: result.source,
       mode: mode || "builder",
-      response: text,
+      response: result.response,
+      conversation: result.conversation,
+      persistenceEnabled: result.persistenceEnabled,
+      persistenceWarning: result.persistenceWarning,
     });
   } catch (error) {
     console.error("ERRO IA:", error.message);
-    trackRequest({ input: req.body?.input, output: "", source: "error", durationMs: Date.now() - t0, error: true });
 
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
       source: "error",
       response:
         "Não foi possível processar sua mensagem. Verifique as variáveis de ambiente do provider configurado.",
       error: error.message,
     });
+  }
+});
+
+app.post("/synapsys/analyze", requireUser, async (req, res) => {
+  try {
+    const result = await runSynapsysTurn({
+      input: req.body?.input,
+      mode: req.body?.mode,
+      conversationId: req.body?.conversationId,
+      projectId: req.body?.projectId,
+      user: req.user,
+      db: req.db,
+    });
+
+    return res.json({
+      success: true,
+      source: result.source,
+      mode: req.body?.mode || "builder",
+      response: result.response,
+      conversation: result.conversation,
+    });
+  } catch (error) {
+    console.error("ERRO IA:", error.message);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      source: "error",
+      response:
+        "Não foi possível processar sua mensagem. Verifique as variáveis de ambiente do provider configurado.",
+      error: error.message,
+    });
+  }
+});
+
+app.post("/synapsys/server-analyze", requireSynapsysServerKey, async (req, res) => {
+  try {
+    const payload = buildServerAnalyzePayload(req.body);
+    const result = await runSynapsysTurn({
+      input: payload.input,
+      mode: payload.mode,
+      conversationId: payload.conversationId,
+      projectId: payload.projectId,
+      user: null,
+      db: null,
+    });
+
+    return res.json({
+      success: true,
+      source: result.source,
+      mode: payload.mode || "builder",
+      response: result.response,
+      conversation: result.conversation,
+    });
+  } catch (error) {
+    console.error("ERRO IA:", error.message);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      source: "error",
+      response:
+        "Não foi possível processar sua mensagem. Verifique as variáveis de ambiente do provider configurado.",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/synapsys/bootstrap", requireUser, async (req, res) => {
+  try {
+    const filter = normalizeConversationFilter(req.query.filter || "30d");
+    const rangeStart = getRangeStart(filter);
+    const limit = toPositiveInteger(req.query.limit, 40, 120);
+
+    const [projects, recentConversations, conversations] = await Promise.all([
+      listProjects(req.db, req.user.id),
+      listRecentConversations(req.db, req.user.id, 10),
+      listConversations(req.db, req.user.id, { filter, rangeStart, limit }),
+    ]);
+
+    return res.json({
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        name: req.user.user_metadata?.name || req.user.email?.split("@")[0] || "Usuario Synapsys",
+      },
+      projects,
+      recentConversations,
+      conversations,
+      defaultFilter: filter,
+    });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel carregar a area da Synapsys.");
+  }
+});
+
+app.get("/api/synapsys/conversations/recent", requireUser, async (req, res) => {
+  try {
+    const limit = toPositiveInteger(req.query.limit, 10, 20);
+    const recentConversations = await listRecentConversations(req.db, req.user.id, limit);
+    return res.json({ items: recentConversations });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel carregar os cerebros recentes.");
+  }
+});
+
+app.get("/api/synapsys/conversations", requireUser, async (req, res) => {
+  try {
+    const { filter, rangeStart, projectId } = getWorkspaceFilter(req);
+    const limit = toPositiveInteger(req.query.limit, 60, 200);
+    const conversations = await listConversations(req.db, req.user.id, {
+      filter,
+      rangeStart,
+      projectId,
+      limit,
+    });
+    return res.json({ items: conversations, filter });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel listar as conversas.");
+  }
+});
+
+app.post("/api/synapsys/conversations", requireUser, async (req, res) => {
+  try {
+    const rawTitle = String(req.body?.title || "").trim();
+    const conversation = await createConversation(req.db, req.user.id, {
+      title: rawTitle || "Novo cerebro",
+      projectId: String(req.body?.projectId || "").trim() || null,
+    });
+    return res.status(201).json({ conversation });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel criar a conversa.");
+  }
+});
+
+app.get("/api/synapsys/conversations/:conversationId", requireUser, async (req, res) => {
+  try {
+    const conversation = await getConversation(req.db, req.user.id, req.params.conversationId, {
+      markOpened: true,
+    });
+    return res.json({ conversation });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel carregar a conversa.");
+  }
+});
+
+app.patch("/api/synapsys/conversations/:conversationId", requireUser, async (req, res) => {
+  try {
+    if (req.body?.title !== undefined && !String(req.body.title || "").trim()) {
+      return res.status(400).json({ error: "O titulo da conversa nao pode ficar vazio." });
+    }
+
+    const conversation = await updateConversation(req.db, req.user.id, req.params.conversationId, {
+      title: req.body?.title !== undefined ? String(req.body.title || "").trim() : undefined,
+      projectId:
+        req.body?.projectId !== undefined ? String(req.body.projectId || "").trim() || null : undefined,
+      archivedAt:
+        req.body?.archived !== undefined
+          ? req.body.archived
+            ? new Date().toISOString()
+            : null
+          : undefined,
+      lastOpenedAt: req.body?.markOpened ? new Date().toISOString() : undefined,
+    });
+
+    return res.json({ conversation });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel atualizar a conversa.");
+  }
+});
+
+app.delete("/api/synapsys/conversations/:conversationId", requireUser, async (req, res) => {
+  try {
+    await deleteConversation(req.db, req.user.id, req.params.conversationId);
+    return res.json({ ok: true });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel excluir a conversa.");
+  }
+});
+
+app.get("/api/synapsys/projects", requireUser, async (req, res) => {
+  try {
+    const projects = await listProjects(req.db, req.user.id);
+    return res.json({ items: projects });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel listar os projetos.");
+  }
+});
+
+app.post("/api/synapsys/projects", requireUser, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ error: "O nome do projeto e obrigatorio." });
+    }
+
+    const project = await createProject(req.db, req.user.id, {
+      name,
+      description: req.body?.description,
+      color: req.body?.color,
+      icon: req.body?.icon,
+    });
+
+    return res.status(201).json({ project });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel criar o projeto.");
+  }
+});
+
+app.patch("/api/synapsys/projects/:projectId", requireUser, async (req, res) => {
+  try {
+    if (req.body?.name !== undefined && !String(req.body.name || "").trim()) {
+      return res.status(400).json({ error: "O nome do projeto nao pode ficar vazio." });
+    }
+
+    const project = await updateProject(req.db, req.user.id, req.params.projectId, {
+      name: req.body?.name,
+      description: req.body?.description,
+      color: req.body?.color,
+      icon: req.body?.icon,
+      archivedAt:
+        req.body?.archived !== undefined
+          ? req.body.archived
+            ? new Date().toISOString()
+            : null
+          : undefined,
+    });
+
+    return res.json({ project });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel atualizar o projeto.");
+  }
+});
+
+app.delete("/api/synapsys/projects/:projectId", requireUser, async (req, res) => {
+  try {
+    await deleteProject(req.db, req.user.id, req.params.projectId);
+    return res.json({ ok: true });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel excluir o projeto.");
+  }
+});
+
+app.get("/api/synapsys/search", requireUser, async (req, res) => {
+  try {
+    const term = String(req.query.q || req.query.term || "").trim();
+    if (!term) {
+      return res.json({ items: [] });
+    }
+
+    const { filter, rangeStart, projectId } = getWorkspaceFilter(req);
+    const limit = toPositiveInteger(req.query.limit, 30, 100);
+    const items = await searchWorkspace(req.db, req.user.id, {
+      term,
+      filter,
+      rangeStart,
+      projectId,
+      limit,
+    });
+
+    return res.json({ items, filter, term });
+  } catch (error) {
+    return handleWorkspaceError(res, error, "Nao foi possivel concluir a busca.");
   }
 });
 
