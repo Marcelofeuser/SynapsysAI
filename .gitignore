@@ -16,3 +16,4 @@ playwright-report/
 test-results/
 *.zip
 **/test-results/
+backend/.env
