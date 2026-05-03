@@ -3,7 +3,7 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/api/(.*)", "destination": "https://synapsys-backend-production.up.railway.app/api/$1" },
     { "source": "/chat/(.*)", "destination": "/index.html" },
     { "source": "/admin/(.*)", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
