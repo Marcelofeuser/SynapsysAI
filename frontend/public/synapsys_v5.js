@@ -259,6 +259,81 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function insertTextAtCursor(field, text) {
+  const safeText = String(text ?? "");
+  const start = field.selectionStart ?? field.value.length;
+  const end = field.selectionEnd ?? field.value.length;
+  const nextValue = field.value.slice(0, start) + safeText + field.value.slice(end);
+  const caret = start + safeText.length;
+
+  field.value = nextValue;
+  field.focus();
+  if (typeof field.setSelectionRange === "function") {
+    field.setSelectionRange(caret, caret);
+  }
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function applyPasteFallback(field, snapshot) {
+  if (typeof navigator?.clipboard?.readText !== "function") {
+    return;
+  }
+
+  try {
+    const clipboardText = await navigator.clipboard.readText();
+    if (!clipboardText) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      const currentStart = field.selectionStart ?? field.value.length;
+      const currentEnd = field.selectionEnd ?? field.value.length;
+      const selectionChanged = currentStart !== snapshot.start || currentEnd !== snapshot.end;
+
+      if (field.value !== snapshot.value || selectionChanged) {
+        return;
+      }
+
+      insertTextAtCursor(field, clipboardText);
+    }, 0);
+  } catch (_) {
+    // Fallback silencioso para navegadores sem acesso programatico ao clipboard.
+  }
+}
+
+function enablePasteSupport(field) {
+  if (!field || field.dataset.pasteBound === "1") {
+    return;
+  }
+
+  field.dataset.pasteBound = "1";
+
+  field.addEventListener("paste", (event) => {
+    const clipboardText = event.clipboardData?.getData("text/plain");
+    if (typeof clipboardText !== "string" || clipboardText.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    insertTextAtCursor(field, clipboardText);
+  });
+
+  field.addEventListener("keydown", (event) => {
+    const isPasteShortcut = (event.metaKey || event.ctrlKey) && !event.altKey && String(event.key || "").toLowerCase() === "v";
+    if (!isPasteShortcut) {
+      return;
+    }
+
+    const snapshot = {
+      value: field.value,
+      start: field.selectionStart ?? field.value.length,
+      end: field.selectionEnd ?? field.value.length,
+    };
+
+    void applyPasteFallback(field, snapshot);
+  });
+}
+
 function buildInitials(name, email) {
   const base = String(name || email || "AI")
     .trim()
@@ -1439,6 +1514,7 @@ function makeNode({ x, y, type, text, isInput, questionText }) {
     const input = document.createElement("textarea");
     input.className = "node-input";
     input.placeholder = "proxima pergunta...";
+    enablePasteSupport(input);
     const button = document.createElement("button");
     button.className = "node-send";
     button.textContent = "disparar ↗";
@@ -2377,6 +2453,7 @@ async function handleMenuAction(action) {
 function bindEvents() {
   window.addEventListener("resize", resizeCanvas);
   dom.lsSendBtn.addEventListener("click", syncSidebarSend);
+  enablePasteSupport(dom.lsInput);
   dom.lsInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
