@@ -200,6 +200,7 @@ app.use(
       "http://localhost:5173",
       "https://synapsys-ai.vercel.app",
       "https://app.insightdisc.com",
+      "https://synapsys.insightdisc.com",
     ],
     credentials: true,
   })
