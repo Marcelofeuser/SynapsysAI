@@ -40,7 +40,7 @@ export default function Admin() {
         const res = await fetch(`${API}/admin/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: ADMIN_PASS }),
+          body: JSON.stringify({ password: 'synapsys-admin-2026' }),
         })
         const data = await res.json()
         if (data.token) setAdminToken(data.token)
