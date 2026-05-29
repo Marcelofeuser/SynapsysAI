@@ -30,6 +30,35 @@ function readPrompt(relativePath, { optional = false } = {}) {
   return fs.readFileSync(fullPath, "utf-8").trim();
 }
 
+function loadCustomKnowledge() {
+  const customDirs = [
+    path.resolve(__dirname, "../../knowledge/custom"),
+    path.resolve(__dirname, "../../../knowledge/custom"),
+  ];
+
+  let customDir = null;
+  for (const d of customDirs) {
+    if (fs.existsSync(d)) { customDir = d; break; }
+  }
+
+  if (!customDir) return "";
+
+  const files = fs.readdirSync(customDir).filter(f =>
+    f.endsWith(".txt") || f.endsWith(".md") || f.endsWith(".json") || f.endsWith(".csv")
+  );
+
+  if (files.length === 0) return "";
+
+  const parts = files.map(name => {
+    try {
+      const content = fs.readFileSync(path.join(customDir, name), "utf-8").trim();
+      return `### Conhecimento: ${name}\n${content}`;
+    } catch { return ""; }
+  }).filter(Boolean);
+
+  return parts.length > 0 ? `## Base de Conhecimento Customizada\n\n${parts.join("\n\n---\n\n")}` : "";
+}
+
 function loadAllPrompts() {
   const systemPrompt = readPrompt("prompts/system-prompt.md");
   const expertRules =
@@ -38,8 +67,9 @@ function loadAllPrompts() {
 
   const saasContext = readPrompt("prompts/saas-context.md", { optional: true });
   const specialization = readPrompt("prompts/specialization-context.md", { optional: true });
+  const customKnowledge = loadCustomKnowledge();
 
-  return [systemPrompt, expertRules, saasContext, specialization].filter(Boolean).join("\n\n");
+  return [systemPrompt, expertRules, saasContext, specialization, customKnowledge].filter(Boolean).join("\n\n");
 }
 
 function loadModePrompt(mode = "builder") {
