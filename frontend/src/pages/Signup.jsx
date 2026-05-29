@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { signUp, signIn } from '../config/supabase'
 
+const SYNAPSYS_SESSION_KEY = 'synapsys.session.v1'
+
 const C = {
   bg: '#030a12', blue: '#50c8ff', green: '#30f0c0',
   text: 'rgba(200,238,255,0.95)', textDim: 'rgba(150,210,255,0.5)',
@@ -20,6 +22,24 @@ export default function Signup() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  function persistSynapsysSession(authData) {
+    const session = authData?.session
+    const user = authData?.user
+
+    if (!session || !user) return
+
+    localStorage.setItem(SYNAPSYS_SESSION_KEY, JSON.stringify({
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      expiresAt: session.expires_at,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.name || name || user.email?.split('@')[0] || 'Usuario Synapsys',
+      },
+    }))
+  }
+
   async function handleSubmit() {
     if (!email || !pass || (mode === 'signup' && !name)) {
       setError('Preencha todos os campos.')
@@ -28,11 +48,17 @@ export default function Signup() {
     setLoading(true)
     setError('')
     try {
+      let authData
+
       if (mode === 'signup') {
-        await signUp(email, pass, name)
+        const created = await signUp(email, pass, name)
+        authData = created?.session ? created : await signIn(email, pass)
       } else {
-        await signIn(email, pass)
+        authData = await signIn(email, pass)
       }
+
+      persistSynapsysSession(authData)
+
       // Após autenticação, redireciona conforme plano
       if (plan === 'premium') {
         navigate('/checkout?plan=premium')

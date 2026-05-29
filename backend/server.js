@@ -25,6 +25,7 @@ const cors = require("cors");
 const OpenAI = require("openai");
 const { loadAllPrompts, loadModePrompt } = require("./src/ai/loadPrompts");
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
@@ -978,6 +979,50 @@ app.get("/admin/stats", adminAuth, (req, res) => {
 app.get("/admin/logs", adminAuth, (req, res) => {
   res.json({ logs: stats.recentLogs });
 });
+// ════════════════════════════════════════════════════════
+//  ADMIN — SYSTEM PROMPT EDITOR
+// ════════════════════════════════════════════════════════
+
+function resolveSystemPromptPath() {
+  const candidates = [
+    path.resolve(__dirname, "..", "prompts", "system-prompt.md"),
+    path.resolve(__dirname, "prompts", "system-prompt.md"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidates[0];
+}
+
+app.get("/admin/system-prompt", adminAuth, (req, res) => {
+  try {
+    const filePath = resolveSystemPromptPath();
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "system-prompt.md não encontrado" });
+    }
+    const content = fs.readFileSync(filePath, "utf-8");
+    res.json({ content, path: filePath });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/admin/system-prompt", adminAuth, (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || typeof content !== "string") {
+      return res.status(400).json({ error: "Campo 'content' obrigatório" });
+    }
+    const filePath = resolveSystemPromptPath();
+    fs.writeFileSync(filePath, content, "utf-8");
+    runtimeConfig.systemPromptOverride = content;
+    console.log(`✅ system-prompt.md atualizado (${content.length} chars)`);
+    res.json({ ok: true, chars: content.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // Config atual
 app.get("/admin/config", adminAuth, (req, res) => {
