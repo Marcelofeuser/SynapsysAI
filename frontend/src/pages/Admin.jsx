@@ -23,8 +23,16 @@ export default function Admin() {
   const [promptText, setPromptText] = useState('')
   const [promptLoading, setPromptLoading] = useState(false)
   const [promptStatus, setPromptStatus] = useState('') // '' | 'saving' | 'saved' | 'error'
-  const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'prompt'
+  const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'prompt' | 'knowledge'
   const [showPass, setShowPass] = useState(false)
+
+  // Knowledge base
+  const [kbFiles, setKbFiles] = useState([])
+  const [kbLoading, setKbLoading] = useState(false)
+  const [kbSelected, setKbSelected] = useState(null) // { name, content }
+  const [kbEditing, setKbEditing] = useState(false)
+  const [kbStatus, setKbStatus] = useState('')
+  const [kbUploading, setKbUploading] = useState(false)
 
   async function handleLogin() {
     if (email === ADMIN_USER && pass === ADMIN_PASS) {
@@ -80,8 +88,80 @@ export default function Admin() {
     setTimeout(() => setPromptStatus(''), 3000)
   }
 
+  async function loadKbFiles(token) {
+    setKbLoading(true)
+    try {
+      const res = await fetch(`${API}/admin/knowledge`, { headers: { 'x-admin-token': token } })
+      const data = await res.json()
+      if (data.files) setKbFiles(data.files)
+    } catch (e) { console.warn(e) }
+    setKbLoading(false)
+  }
+
+  async function loadKbFile(name) {
+    try {
+      const res = await fetch(`${API}/admin/knowledge/content?name=${encodeURIComponent(name)}`, { headers: { 'x-admin-token': adminToken } })
+      const data = await res.json()
+      setKbSelected({ name, content: data.content })
+      setKbEditing(false)
+    } catch (e) { console.warn(e) }
+  }
+
+  async function saveKbFile() {
+    if (!kbSelected) return
+    setKbStatus('saving')
+    try {
+      const res = await fetch(`${API}/admin/knowledge/content`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+        body: JSON.stringify({ name: kbSelected.name, content: kbSelected.content })
+      })
+      const data = await res.json()
+      setKbStatus(data.ok ? 'saved' : 'error')
+    } catch (e) { setKbStatus('error') }
+    setTimeout(() => setKbStatus(''), 3000)
+  }
+
+  async function deleteKbFile(name) {
+    if (!confirm(`Deletar "${name}"?`)) return
+    try {
+      await fetch(`${API}/admin/knowledge`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+        body: JSON.stringify({ name })
+      })
+      setKbFiles(f => f.filter(x => x.name !== name))
+      if (kbSelected?.name === name) setKbSelected(null)
+    } catch (e) { console.warn(e) }
+  }
+
+  async function uploadKbFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setKbUploading(true)
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1]
+      try {
+        const res = await fetch(`${API}/admin/knowledge/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+          body: JSON.stringify({ name: file.name, content: base64, encoding: 'base64' })
+        })
+        const data = await res.json()
+        if (data.ok) loadKbFiles(adminToken)
+      } catch (e) { console.warn(e) }
+      setKbUploading(false)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
   useEffect(() => {
-    if (logged && adminToken) loadPrompt(adminToken)
+    if (logged && adminToken) {
+      loadPrompt(adminToken)
+      loadKbFiles(adminToken)
+    }
   }, [logged, adminToken])
 
   const inp = (val, set, type, placeholder) => (
@@ -123,6 +203,7 @@ export default function Admin() {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'prompt', label: '🧠 Personalidade da IA' },
+    { id: 'knowledge', label: '📚 Base de Conhecimento' },
   ]
 
   return (
@@ -280,6 +361,87 @@ export default function Admin() {
           <p style={{ fontSize: 11, color: 'rgba(80,200,255,0.2)', marginTop: '1rem', textAlign: 'right' }}>
             Para persistência permanente, após salvar commite o arquivo <code>prompts/system-prompt.md</code> no GitHub.
           </p>
+        </div>
+      )}
+
+      {/* ── BASE DE CONHECIMENTO TAB ── */}
+      {activeTab === 'knowledge' && (
+        <div style={{ padding: '3rem 2rem', maxWidth: 900, margin: '0 auto' }}>
+          <div style={{ marginBottom: '2rem' }}>
+            <h1 style={{ fontSize: '1.8rem', fontWeight: 400, color: C.text, marginBottom: '.5rem' }}>📚 Base de Conhecimento</h1>
+            <p style={{ fontSize: 13, color: C.textFaint }}>Adicione arquivos para enriquecer o conhecimento da IA. Formatos: .txt, .md, .pdf, .json</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: kbSelected ? '280px 1fr' : '1fr', gap: 16 }}>
+            {/* Lista de arquivos */}
+            <div>
+              {/* Upload */}
+              <label style={{ display: 'block', background: 'rgba(80,200,255,0.07)', border: '1px dashed rgba(80,200,255,0.3)', borderRadius: 12, padding: '1rem', textAlign: 'center', cursor: 'pointer', marginBottom: 12, transition: 'border-color .2s' }}
+                onMouseOver={e => e.currentTarget.style.borderColor = 'rgba(80,200,255,0.6)'}
+                onMouseOut={e => e.currentTarget.style.borderColor = 'rgba(80,200,255,0.3)'}>
+                <input type="file" accept=".txt,.md,.pdf,.json,.csv" onChange={uploadKbFile} style={{ display: 'none' }} />
+                <div style={{ fontSize: 24, marginBottom: 6 }}>📎</div>
+                <div style={{ fontSize: 13, color: C.blue }}>{kbUploading ? 'Enviando...' : 'Clique para fazer upload'}</div>
+                <div style={{ fontSize: 11, color: C.textFaint, marginTop: 4 }}>.txt .md .pdf .json .csv</div>
+              </label>
+
+              {/* Lista */}
+              <div style={{ background: 'rgba(5,18,35,0.8)', border: `0.5px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 14px', borderBottom: `0.5px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: C.textFaint, letterSpacing: '.1em' }}>ARQUIVOS ({kbFiles.length})</span>
+                  <button onClick={() => loadKbFiles(adminToken)} style={{ background: 'none', border: 'none', color: C.textFaint, cursor: 'pointer', fontSize: 13 }}>⟳</button>
+                </div>
+                {kbLoading ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: C.textFaint, fontSize: 12 }}>Carregando...</div>
+                ) : kbFiles.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: C.textFaint, fontSize: 12 }}>Nenhum arquivo ainda</div>
+                ) : kbFiles.map(f => (
+                  <div key={f.name} onClick={() => loadKbFile(f.name)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `0.5px solid ${C.border}`, cursor: 'pointer', background: kbSelected?.name === f.name ? 'rgba(80,200,255,0.08)' : 'transparent', transition: 'background .15s' }}
+                    onMouseOver={e => { if (kbSelected?.name !== f.name) e.currentTarget.style.background = 'rgba(80,200,255,0.04)' }}
+                    onMouseOut={e => { if (kbSelected?.name !== f.name) e.currentTarget.style.background = 'transparent' }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: kbSelected?.name === f.name ? C.blue : C.text }}>{f.name}</div>
+                      <div style={{ fontSize: 10, color: C.textFaint }}>{(f.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                    <button onClick={e => { e.stopPropagation(); deleteKbFile(f.name) }}
+                      style={{ background: 'none', border: 'none', color: 'rgba(220,80,80,0.5)', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Editor de arquivo */}
+            {kbSelected && (
+              <div style={{ background: 'rgba(5,18,35,0.8)', border: `0.5px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `0.5px solid ${C.border}`, background: 'rgba(5,15,28,0.9)' }}>
+                  <span style={{ fontSize: 11, color: C.textFaint }}>{kbSelected.name}</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {kbStatus === 'saved' && <span style={{ fontSize: 12, color: C.green }}>✓ Salvo</span>}
+                    {kbStatus === 'error' && <span style={{ fontSize: 12, color: '#f05050' }}>✗ Erro</span>}
+                    {!kbEditing ? (
+                      <button onClick={() => setKbEditing(true)}
+                        style={{ background: 'rgba(80,200,255,0.07)', border: `0.5px solid ${C.border}`, borderRadius: 7, color: C.textDim, fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>✏️ Editar</button>
+                    ) : (
+                      <>
+                        <button onClick={() => setKbEditing(false)}
+                          style={{ background: 'none', border: `0.5px solid ${C.border}`, borderRadius: 7, color: C.textFaint, fontSize: 12, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+                        <button onClick={saveKbFile}
+                          style={{ background: 'rgba(20,80,140,0.85)', border: `0.5px solid rgba(80,200,255,0.5)`, borderRadius: 7, color: C.blue, fontSize: 12, fontWeight: 500, padding: '4px 14px', cursor: 'pointer', fontFamily: 'inherit' }}>💾 Salvar</button>
+                      </>
+                    )}
+                    <button onClick={() => setKbSelected(null)} style={{ background: 'none', border: 'none', color: C.textFaint, cursor: 'pointer', fontSize: 16 }}>✕</button>
+                  </div>
+                </div>
+                <textarea
+                  value={kbSelected.content || ''}
+                  onChange={e => kbEditing && setKbSelected(s => ({ ...s, content: e.target.value }))}
+                  readOnly={!kbEditing}
+                  style={{ flex: 1, minHeight: 480, background: 'transparent', border: 'none', outline: 'none', resize: 'none', padding: '1.5rem', fontSize: 12, lineHeight: 1.7, color: kbEditing ? 'rgba(200,238,255,0.85)' : C.textDim, fontFamily: '"SF Mono","Fira Code",monospace', boxSizing: 'border-box', cursor: kbEditing ? 'text' : 'default' }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

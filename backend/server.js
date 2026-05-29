@@ -980,6 +980,98 @@ app.get("/admin/logs", adminAuth, (req, res) => {
   res.json({ logs: stats.recentLogs });
 });
 // ════════════════════════════════════════════════════════
+//  ADMIN — BASE DE CONHECIMENTO
+// ════════════════════════════════════════════════════════
+
+const KNOWLEDGE_DIR = (() => {
+  const candidates = [
+    path.resolve(__dirname, "..", "knowledge", "custom"),
+    path.resolve(__dirname, "knowledge", "custom"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(path.dirname(p))) return p;
+  }
+  return candidates[0];
+})();
+
+// Garante que a pasta custom existe
+if (!fs.existsSync(KNOWLEDGE_DIR)) {
+  fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
+}
+
+// GET /admin/knowledge — lista arquivos
+app.get("/admin/knowledge", adminAuth, (req, res) => {
+  try {
+    const files = fs.readdirSync(KNOWLEDGE_DIR).map(name => {
+      const filePath = path.join(KNOWLEDGE_DIR, name);
+      const stat = fs.statSync(filePath);
+      return { name, size: stat.size, updatedAt: stat.mtime };
+    });
+    res.json({ files });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /admin/knowledge/content?name=arquivo.txt — conteúdo do arquivo
+app.get("/admin/knowledge/content", adminAuth, (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name || name.includes("..")) return res.status(400).json({ error: "Nome inválido" });
+    const filePath = path.join(KNOWLEDGE_DIR, name);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Arquivo não encontrado" });
+    const content = fs.readFileSync(filePath, "utf-8");
+    res.json({ content });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /admin/knowledge/upload — upload de arquivo (base64)
+app.post("/admin/knowledge/upload", adminAuth, (req, res) => {
+  try {
+    const { name, content, encoding } = req.body;
+    if (!name || name.includes("..")) return res.status(400).json({ error: "Nome inválido" });
+    const filePath = path.join(KNOWLEDGE_DIR, name);
+    if (encoding === "base64") {
+      fs.writeFileSync(filePath, Buffer.from(content, "base64"));
+    } else {
+      fs.writeFileSync(filePath, content, "utf-8");
+    }
+    res.json({ ok: true, name });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /admin/knowledge/content — salva edição
+app.put("/admin/knowledge/content", adminAuth, (req, res) => {
+  try {
+    const { name, content } = req.body;
+    if (!name || name.includes("..")) return res.status(400).json({ error: "Nome inválido" });
+    const filePath = path.join(KNOWLEDGE_DIR, name);
+    fs.writeFileSync(filePath, content, "utf-8");
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /admin/knowledge — deleta arquivo
+app.delete("/admin/knowledge", adminAuth, (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || name.includes("..")) return res.status(400).json({ error: "Nome inválido" });
+    const filePath = path.join(KNOWLEDGE_DIR, name);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Arquivo não encontrado" });
+    fs.unlinkSync(filePath);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════
 //  ADMIN — SYSTEM PROMPT EDITOR
 // ════════════════════════════════════════════════════════
 
