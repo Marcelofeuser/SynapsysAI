@@ -1027,17 +1027,31 @@ app.get("/admin/knowledge/content", adminAuth, (req, res) => {
   }
 });
 
-// POST /admin/knowledge/upload — upload de arquivo (base64)
-app.post("/admin/knowledge/upload", adminAuth, (req, res) => {
+// POST /admin/knowledge/upload — upload de arquivo (base64), com extração de PDF
+app.post("/admin/knowledge/upload", adminAuth, async (req, res) => {
   try {
     const { name, content, encoding } = req.body;
     if (!name || name.includes("..")) return res.status(400).json({ error: "Nome inválido" });
-    const filePath = path.join(KNOWLEDGE_DIR, name);
-    if (encoding === "base64") {
-      fs.writeFileSync(filePath, Buffer.from(content, "base64"));
-    } else {
-      fs.writeFileSync(filePath, content, "utf-8");
+
+    const buffer = encoding === "base64" ? Buffer.from(content, "base64") : Buffer.from(content, "utf-8");
+
+    // Se for PDF, extrai o texto
+    if (name.toLowerCase().endsWith(".pdf")) {
+      try {
+        const pdfParse = require("pdf-parse");
+        const data = await pdfParse(buffer);
+        const txtName = name.replace(/\.pdf$/i, ".txt");
+        const filePath = path.join(KNOWLEDGE_DIR, txtName);
+        fs.writeFileSync(filePath, data.text, "utf-8");
+        return res.json({ ok: true, name: txtName, pages: data.numpages, converted: true });
+      } catch (pdfErr) {
+        return res.status(500).json({ error: "Erro ao processar PDF: " + pdfErr.message });
+      }
     }
+
+    // Outros formatos: salva normalmente
+    const filePath = path.join(KNOWLEDGE_DIR, name);
+    fs.writeFileSync(filePath, buffer);
     res.json({ ok: true, name });
   } catch (e) {
     res.status(500).json({ error: e.message });
