@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 const ADMIN_USER = 'admin@synapsys.insightdisc.com'
 const ADMIN_PASS = 'Syn@2025#Admin'
-const API = 'https://ai.insightdisc.com'
+const API = 'https://synapsys-backend-production.up.railway.app'
 
 const C = {
   bg: '#030a12', blue: '#50c8ff', green: '#30f0c0',
