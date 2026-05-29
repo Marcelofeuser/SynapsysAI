@@ -24,6 +24,7 @@ export default function Admin() {
   const [promptLoading, setPromptLoading] = useState(false)
   const [promptStatus, setPromptStatus] = useState('') // '' | 'saving' | 'saved' | 'error'
   const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'prompt'
+  const [showPass, setShowPass] = useState(false)
 
   async function handleLogin() {
     if (email === ADMIN_USER && pass === ADMIN_PASS) {
@@ -106,7 +107,10 @@ export default function Admin() {
         </div>
         <div style={{ background: '#050f1c', border: '0.5px solid rgba(80,200,255,0.2)', borderRadius: 16, padding: '2rem' }}>
           {inp(email, setEmail, 'email', 'E-mail admin')}
-          {inp(pass, setPass, 'password', 'Senha')}
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <input type={showPass ? 'text' : 'password'} value={pass} placeholder="Senha" onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} style={{ width: '100%', background: 'rgba(8,35,65,0.9)', border: '0.5px solid rgba(80,200,255,0.3)', borderRadius: 9, padding: '11px 40px 11px 14px', fontSize: 13, color: '#c8eeff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+            <button type="button" onClick={() => setShowPass(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(80,200,255,0.5)', fontSize: 14, lineHeight: 1, padding: 0 }}>{showPass ? '🙈' : '👁️'}</button>
+          </div>
           {error && <p style={{ fontSize: 12, color: '#f05050', marginBottom: 12 }}>{error}</p>}
           <button onClick={handleLogin} style={{ width: '100%', padding: 12, borderRadius: 9, background: 'rgba(20,80,140,0.85)', border: '0.5px solid rgba(80,200,255,0.5)', color: C.blue, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>Entrar no painel →</button>
         </div>
