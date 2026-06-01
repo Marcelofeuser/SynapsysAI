@@ -26,6 +26,14 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'prompt' | 'knowledge'
   const [showPass, setShowPass] = useState(false)
 
+  // Usuarios
+  const [users, setUsers] = useState([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [userForm, setUserForm] = useState({ name:'', email:'', password:'', plan:'personal', role:'user' })
+  const [userStatus, setUserStatus] = useState('') // '' | 'saving' | 'saved' | 'error' | string
+  const [userSearch, setUserSearch] = useState('')
+  const [showUserForm, setShowUserForm] = useState(false)
+
   // Knowledge base
   const [kbFiles, setKbFiles] = useState([])
   const [kbLoading, setKbLoading] = useState(false)
@@ -157,10 +165,69 @@ export default function Admin() {
     e.target.value = ''
   }
 
+  async function loadUsers() {
+    setUsersLoading(true)
+    try {
+      const res = await fetch(`${API}/admin/users`, { headers: { 'x-admin-token': adminToken } })
+      const data = await res.json()
+      if (Array.isArray(data.users)) setUsers(data.users)
+      else if (Array.isArray(data)) setUsers(data)
+    } catch(e) { console.warn('Erro ao carregar usuários:', e) }
+    setUsersLoading(false)
+  }
+
+  async function createUser() {
+    if (!userForm.name || !userForm.email || !userForm.password) {
+      setUserStatus('Preencha todos os campos obrigatórios.'); return
+    }
+    setUserStatus('saving')
+    try {
+      const res = await fetch(`${API}/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+        body: JSON.stringify(userForm)
+      })
+      const data = await res.json()
+      if (data.ok || data.id || data.user) {
+        setUserStatus('saved')
+        setUserForm({ name:'', email:'', password:'', plan:'personal', role:'user' })
+        setShowUserForm(false)
+        loadUsers()
+      } else {
+        setUserStatus(data.error || 'Erro ao criar usuário.')
+      }
+    } catch(e) { setUserStatus('Erro de conexão.') }
+    setTimeout(() => setUserStatus(''), 4000)
+  }
+
+  async function deleteUser(id, name) {
+    if (!confirm(`Deletar usuário "${name}"?`)) return
+    try {
+      const res = await fetch(`${API}/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken }
+      })
+      const data = await res.json()
+      if (data.ok || data.deleted) setUsers(u => u.filter(x => x.id !== id))
+    } catch(e) { console.warn(e) }
+  }
+
+  async function toggleUserPlan(id, newPlan) {
+    try {
+      await fetch(`${API}/admin/users/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+        body: JSON.stringify({ plan: newPlan })
+      })
+      setUsers(u => u.map(x => x.id === id ? { ...x, plan: newPlan } : x))
+    } catch(e) { console.warn(e) }
+  }
+
   useEffect(() => {
     if (logged && adminToken) {
       loadPrompt(adminToken)
       loadKbFiles(adminToken)
+      loadUsers()
     }
   }, [logged, adminToken])
 
@@ -204,6 +271,7 @@ export default function Admin() {
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'prompt', label: '🧠 Personalidade da IA' },
     { id: 'knowledge', label: '📚 Base de Conhecimento' },
+    { id: 'users', label: '👥 Usuários' },
   ]
 
   return (
@@ -444,6 +512,151 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {/* ── USUARIOS TAB ── */}
+      {activeTab === 'users' && (
+        <div style={{ padding: '3rem 2rem', maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h1 style={{ fontSize: '1.8rem', fontWeight: 400, color: C.text, marginBottom: '.5rem' }}>👥 Usuários</h1>
+              <p style={{ fontSize: 13, color: C.textFaint }}>Cadastre e gerencie os usuários da plataforma.</p>
+            </div>
+            <button onClick={() => setShowUserForm(v => !v)}
+              style={{ background: showUserForm ? 'rgba(80,200,255,0.15)' : 'rgba(20,80,140,0.85)', border: `0.5px solid rgba(80,200,255,0.5)`, borderRadius: 10, color: C.blue, fontSize: 13, fontWeight: 500, padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {showUserForm ? '✕ Cancelar' : '+ Novo usuário'}
+            </button>
+          </div>
+
+          {/* Formulário de cadastro */}
+          {showUserForm && (
+            <div style={{ background: 'rgba(5,18,35,0.9)', border: `0.5px solid rgba(80,200,255,0.25)`, borderRadius: 16, padding: '2rem', marginBottom: '2rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 500, color: C.blue, marginBottom: '1.5rem', letterSpacing: '.05em' }}>CADASTRAR NOVO USUÁRIO</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[
+                  { key:'name', label:'Nome completo *', placeholder:'João Silva', type:'text' },
+                  { key:'email', label:'E-mail *', placeholder:'joao@empresa.com', type:'email' },
+                  { key:'password', label:'Senha *', placeholder:'Mínimo 8 caracteres', type:'password' },
+                ].map(f => (
+                  <div key={f.key} style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    <label style={{ fontSize:11, color:C.textFaint, letterSpacing:'.08em' }}>{f.label}</label>
+                    <input type={f.type} value={userForm[f.key]} placeholder={f.placeholder}
+                      onChange={e => setUserForm(u => ({...u, [f.key]: e.target.value}))}
+                      style={{ background:'rgba(8,28,58,0.9)', border:`0.5px solid rgba(80,200,255,0.25)`, borderRadius:9, padding:'10px 14px', fontSize:13, color:C.text, fontFamily:'inherit', outline:'none' }} />
+                  </div>
+                ))}
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  <label style={{ fontSize:11, color:C.textFaint, letterSpacing:'.08em' }}>Plano</label>
+                  <select value={userForm.plan} onChange={e => setUserForm(u => ({...u, plan:e.target.value}))}
+                    style={{ background:'rgba(8,28,58,0.9)', border:`0.5px solid rgba(80,200,255,0.25)`, borderRadius:9, padding:'10px 14px', fontSize:13, color:C.text, fontFamily:'inherit', outline:'none', cursor:'pointer' }}>
+                    <option value="free">Free / Trial</option>
+                    <option value="personal">Personal</option>
+                    <option value="professional">Professional</option>
+                    <option value="business">Business Corporation</option>
+                    <option value="diamond">Diamond Consulting</option>
+                  </select>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  <label style={{ fontSize:11, color:C.textFaint, letterSpacing:'.08em' }}>Perfil</label>
+                  <select value={userForm.role} onChange={e => setUserForm(u => ({...u, role:e.target.value}))}
+                    style={{ background:'rgba(8,28,58,0.9)', border:`0.5px solid rgba(80,200,255,0.25)`, borderRadius:9, padding:'10px 14px', fontSize:13, color:C.text, fontFamily:'inherit', outline:'none', cursor:'pointer' }}>
+                    <option value="user">Usuário</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Status */}
+              {userStatus && userStatus !== 'saving' && (
+                <div style={{ marginTop:12, padding:'10px 14px', borderRadius:9, background: userStatus==='saved' ? 'rgba(48,240,192,0.08)' : 'rgba(240,80,80,0.08)', border:`0.5px solid ${userStatus==='saved' ? 'rgba(48,240,192,0.3)' : 'rgba(240,80,80,0.3)'}`, fontSize:13, color: userStatus==='saved' ? C.green : '#f05050' }}>
+                  {userStatus==='saved' ? '✓ Usuário criado com sucesso!' : userStatus}
+                </div>
+              )}
+
+              <div style={{ display:'flex', gap:10, marginTop:'1.5rem', justifyContent:'flex-end' }}>
+                <button onClick={() => setShowUserForm(false)}
+                  style={{ background:'none', border:`0.5px solid ${C.border}`, borderRadius:9, color:C.textFaint, fontSize:13, padding:'10px 20px', cursor:'pointer', fontFamily:'inherit' }}>
+                  Cancelar
+                </button>
+                <button onClick={createUser} disabled={userStatus==='saving'}
+                  style={{ background:'rgba(20,80,140,0.85)', border:`0.5px solid rgba(80,200,255,0.5)`, borderRadius:9, color:C.blue, fontSize:13, fontWeight:500, padding:'10px 24px', cursor:userStatus==='saving'?'not-allowed':'pointer', fontFamily:'inherit', opacity:userStatus==='saving'?0.6:1 }}>
+                  {userStatus==='saving' ? 'Criando...' : '✓ Criar usuário'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Busca */}
+          <div style={{ position:'relative', marginBottom:16 }}>
+            <span style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:C.textFaint, fontSize:14 }}>⌕</span>
+            <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Buscar por nome ou e-mail..."
+              style={{ width:'100%', background:'rgba(5,18,35,0.8)', border:`0.5px solid ${C.border}`, borderRadius:10, padding:'10px 14px 10px 38px', fontSize:13, color:C.text, fontFamily:'inherit', outline:'none', boxSizing:'border-box' }} />
+          </div>
+
+          {/* Lista de usuários */}
+          <div style={{ background:'rgba(5,18,35,0.8)', border:`0.5px solid ${C.border}`, borderRadius:16, overflow:'hidden' }}>
+            {/* Header da tabela */}
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 2fr 1fr 1fr 80px', gap:0, padding:'10px 16px', borderBottom:`0.5px solid ${C.border}`, background:'rgba(5,15,28,0.9)' }}>
+              {['NOME','E-MAIL','PLANO','PERFIL','AÇÕES'].map(h => (
+                <span key={h} style={{ fontSize:10, color:C.textFaint, letterSpacing:'.1em', fontWeight:500 }}>{h}</span>
+              ))}
+            </div>
+
+            {usersLoading ? (
+              <div style={{ padding:'3rem', textAlign:'center', color:C.textFaint, fontSize:13 }}>
+                <div style={{ width:20, height:20, border:`2px solid ${C.border}`, borderTopColor:C.blue, borderRadius:'50%', animation:'spin 1s linear infinite', margin:'0 auto 1rem' }} />
+                Carregando usuários...
+              </div>
+            ) : users.length === 0 ? (
+              <div style={{ padding:'3rem', textAlign:'center', color:C.textFaint, fontSize:13 }}>
+                <div style={{ fontSize:32, marginBottom:12 }}>👤</div>
+                Nenhum usuário cadastrado ainda.
+              </div>
+            ) : users
+              .filter(u => !userSearch || u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()))
+              .map((u, i) => (
+              <div key={u.id || i} style={{ display:'grid', gridTemplateColumns:'2fr 2fr 1fr 1fr 80px', gap:0, padding:'12px 16px', borderBottom:`0.5px solid ${C.border}`, alignItems:'center', transition:'background .15s' }}
+                onMouseOver={e => e.currentTarget.style.background='rgba(80,200,255,0.03)'}
+                onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                <div>
+                  <div style={{ fontSize:13, color:C.text, fontWeight:500 }}>{u.name || '—'}</div>
+                  <div style={{ fontSize:10, color:C.textFaint, marginTop:2 }}>ID: {u.id}</div>
+                </div>
+                <div style={{ fontSize:13, color:C.textDim }}>{u.email}</div>
+                <div>
+                  <select value={u.plan || 'free'} onChange={e => toggleUserPlan(u.id, e.target.value)}
+                    style={{ background:'rgba(80,200,255,0.06)', border:`0.5px solid rgba(80,200,255,0.2)`, borderRadius:6, padding:'4px 8px', fontSize:11, color:C.blue, fontFamily:'inherit', cursor:'pointer', outline:'none' }}>
+                    <option value="free">Free</option>
+                    <option value="personal">Personal</option>
+                    <option value="professional">Professional</option>
+                    <option value="business">Business</option>
+                    <option value="diamond">Diamond</option>
+                  </select>
+                </div>
+                <div>
+                  <span style={{ fontSize:11, color: u.role==='admin' ? C.green : C.textFaint, background: u.role==='admin' ? 'rgba(48,240,192,0.08)' : 'rgba(80,200,255,0.05)', border:`0.5px solid ${u.role==='admin' ? 'rgba(48,240,192,0.3)' : C.border}`, borderRadius:20, padding:'2px 10px' }}>
+                    {u.role || 'user'}
+                  </span>
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => deleteUser(u.id, u.name)}
+                    style={{ background:'none', border:`0.5px solid rgba(220,80,80,0.3)`, borderRadius:6, color:'rgba(220,80,80,0.6)', fontSize:12, padding:'4px 10px', cursor:'pointer', fontFamily:'inherit' }}
+                    onMouseOver={e => { e.currentTarget.style.background='rgba(220,80,80,0.1)'; e.currentTarget.style.color='rgba(220,80,80,0.9)' }}
+                    onMouseOut={e => { e.currentTarget.style.background='none'; e.currentTarget.style.color='rgba(220,80,80,0.6)' }}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Footer */}
+            <div style={{ padding:'10px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:`0.5px solid ${C.border}` }}>
+              <span style={{ fontSize:11, color:C.textFaint }}>{users.length} usuário(s) cadastrado(s)</span>
+              <button onClick={loadUsers} style={{ background:'none', border:`0.5px solid ${C.border}`, borderRadius:7, color:C.textFaint, fontSize:11, padding:'4px 12px', cursor:'pointer', fontFamily:'inherit' }}>⟳ Atualizar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
