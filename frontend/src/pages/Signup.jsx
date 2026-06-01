@@ -63,7 +63,7 @@ export default function Signup() {
       if (plan === 'premium') {
         navigate('/checkout?plan=premium')
       } else {
-        window.location.href = '/synapsys_v5.html'
+        window.location.href = '/synapsys_v6.html'
       }
     } catch (err) {
       setError(err.message || 'Erro ao autenticar. Tente novamente.')
