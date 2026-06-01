@@ -305,7 +305,7 @@ export default function Admin() {
           {/* Cards de acesso rápido */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16, marginBottom: '3rem' }}>
             {[
-              { label: 'Acessar SynapsysAI', desc: 'Abrir o chat da plataforma', color: C.blue, action: () => window.open('/synapsys_v5.html', '_blank') },
+              { label: 'Acessar SynapsysAI', desc: 'Abrir o chat da plataforma', color: C.blue, action: () => window.open('/synapsys_v6.html', '_blank') },
               { label: 'Landing page', desc: 'Ver a página pública', color: C.green, action: () => navigate('/') },
               { label: 'Stripe Dashboard', desc: 'Gerenciar pagamentos', color: '#635bff', action: () => window.open('https://dashboard.stripe.com', '_blank') },
               { label: 'Vercel', desc: 'Deploy e configurações', color: '#fff', action: () => window.open('https://vercel.com', '_blank') },
@@ -336,7 +336,7 @@ export default function Admin() {
             <div style={{ fontSize: 10, color: 'rgba(80,200,255,0.35)', letterSpacing: '.15em', marginBottom: '.75rem' }}>ACESSO RÁPIDO</div>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 400, color: C.text, marginBottom: '.5rem' }}>Abrir SynapsysAI</h3>
             <p style={{ fontSize: 13, color: C.textFaint, marginBottom: '1.5rem' }}>Acesse o chat da plataforma diretamente pelo painel admin.</p>
-            <button onClick={() => window.open('/synapsys_v5.html', '_blank')} style={{ background: 'rgba(20,80,140,0.8)', border: '0.5px solid rgba(80,200,255,0.5)', borderRadius: 10, color: C.blue, fontSize: 14, padding: '12px 32px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+            <button onClick={() => window.open('/synapsys_v6.html', '_blank')} style={{ background: 'rgba(20,80,140,0.8)', border: '0.5px solid rgba(80,200,255,0.5)', borderRadius: 10, color: C.blue, fontSize: 14, padding: '12px 32px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
               Abrir SynapsysAI →
             </button>
           </div>
@@ -518,8 +518,8 @@ export default function Admin() {
         <div style={{ padding: '3rem 2rem', maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <h1 style={{ fontSize: '1.8rem', fontWeight: 400, color: C.text, marginBottom: '.5rem' }}>👥 Usuários</h1>
-              <p style={{ fontSize: 13, color: C.textFaint }}>Cadastre e gerencie os usuários da plataforma.</p>
+              <h1 style={{ fontSize: '1.8rem', fontWeight: 500, color: 'rgba(220,240,255,1)', marginBottom: '.5rem' }}>👥 Usuários</h1>
+              <p style={{ fontSize: 13, color: 'rgba(150,210,255,0.7)' }}>Cadastre e gerencie os usuários da plataforma.</p>
             </div>
             <button onClick={() => setShowUserForm(v => !v)}
               style={{ background: showUserForm ? 'rgba(80,200,255,0.15)' : 'rgba(20,80,140,0.85)', border: `0.5px solid rgba(80,200,255,0.5)`, borderRadius: 10, color: C.blue, fontSize: 13, fontWeight: 500, padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -537,7 +537,7 @@ export default function Admin() {
                   { key:'email', label:'E-mail *', placeholder:'joao@empresa.com', type:'email' },
                 ].map(f => (
                   <div key={f.key} style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                    <label style={{ fontSize:11, color:C.textFaint, letterSpacing:'.08em' }}>{f.label}</label>
+                    <label style={{ fontSize:11, color:'rgba(150,210,255,0.8)', letterSpacing:'.08em' }}>{f.label}</label>
                     <input type={f.type} value={userForm[f.key]} placeholder={f.placeholder}
                       onChange={e => setUserForm(u => ({...u, [f.key]: e.target.value}))}
                       style={{ background:'rgba(8,28,58,0.9)', border:`0.5px solid rgba(80,200,255,0.25)`, borderRadius:9, padding:'10px 14px', fontSize:13, color:C.text, fontFamily:'inherit', outline:'none' }} />
@@ -596,7 +596,7 @@ export default function Admin() {
             {/* Header da tabela */}
             <div style={{ display:'grid', gridTemplateColumns:'2fr 2fr 1fr 1fr 80px', gap:0, padding:'10px 16px', borderBottom:`0.5px solid ${C.border}`, background:'rgba(5,15,28,0.9)' }}>
               {['NOME','E-MAIL','PLANO','PERFIL','AÇÕES'].map(h => (
-                <span key={h} style={{ fontSize:10, color:C.textFaint, letterSpacing:'.1em', fontWeight:500 }}>{h}</span>
+                <span key={h} style={{ fontSize:10, color:'rgba(180,220,255,0.8)', letterSpacing:'.1em', fontWeight:600 }}>{h}</span>
               ))}
             </div>
 
@@ -617,10 +617,10 @@ export default function Admin() {
                 onMouseOver={e => e.currentTarget.style.background='rgba(80,200,255,0.03)'}
                 onMouseOut={e => e.currentTarget.style.background='transparent'}>
                 <div>
-                  <div style={{ fontSize:13, color:C.text, fontWeight:500 }}>{u.name || '—'}</div>
-                  <div style={{ fontSize:10, color:C.textFaint, marginTop:2 }}>ID: {u.id}</div>
+                  <div style={{ fontSize:13, color:'rgba(220,240,255,0.95)', fontWeight:500 }}>{u.name || '—'}</div>
+                  <div style={{ fontSize:10, color:'rgba(120,180,220,0.6)', marginTop:2 }}>ID: {u.id}</div>
                 </div>
-                <div style={{ fontSize:13, color:C.textDim }}>{u.email}</div>
+                <div style={{ fontSize:13, color:'rgba(160,210,255,0.85)' }}>{u.email}</div>
                 <div>
                   <select value={u.plan || 'free'} onChange={e => toggleUserPlan(u.id, e.target.value)}
                     style={{ background:'rgba(80,200,255,0.06)', border:`0.5px solid rgba(80,200,255,0.2)`, borderRadius:6, padding:'4px 8px', fontSize:11, color:C.blue, fontFamily:'inherit', cursor:'pointer', outline:'none' }}>
@@ -649,7 +649,7 @@ export default function Admin() {
 
             {/* Footer */}
             <div style={{ padding:'10px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:`0.5px solid ${C.border}` }}>
-              <span style={{ fontSize:11, color:C.textFaint }}>{users.length} usuário(s) cadastrado(s)</span>
+              <span style={{ fontSize:11, color:'rgba(160,210,255,0.7)' }}>{users.length} usuário(s) cadastrado(s)</span>
               <button onClick={loadUsers} style={{ background:'none', border:`0.5px solid ${C.border}`, borderRadius:7, color:C.textFaint, fontSize:11, padding:'4px 12px', cursor:'pointer', fontFamily:'inherit' }}>⟳ Atualizar</button>
             </div>
           </div>
