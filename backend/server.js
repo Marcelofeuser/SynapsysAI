@@ -84,7 +84,7 @@ async function resolveUserFromRequest(req, { required = true } = {}) {
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser(token);
+  } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !user) {
     if (!required) {
