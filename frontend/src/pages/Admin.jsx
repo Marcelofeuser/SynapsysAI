@@ -177,27 +177,27 @@ export default function Admin() {
   }
 
   async function createUser() {
-    if (!userForm.name || !userForm.email || !userForm.password) {
-      setUserStatus('Preencha todos os campos obrigatórios.'); return
+    if (!userForm.name || !userForm.email) {
+      setUserStatus('Nome e e-mail são obrigatórios.'); return
     }
     setUserStatus('saving')
     try {
-      const res = await fetch(`${API}/admin/users`, {
+      const res = await fetch(`${API}/admin/users/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
-        body: JSON.stringify(userForm)
+        body: JSON.stringify({ name: userForm.name, email: userForm.email, plan: userForm.plan, role: userForm.role })
       })
       const data = await res.json()
-      if (data.ok || data.id || data.user) {
+      if (data.ok) {
         setUserStatus('saved')
         setUserForm({ name:'', email:'', password:'', plan:'personal', role:'user' })
         setShowUserForm(false)
-        loadUsers()
+        setTimeout(() => loadUsers(), 1500)
       } else {
-        setUserStatus(data.error || 'Erro ao criar usuário.')
+        setUserStatus(data.error || 'Erro ao enviar convite.')
       }
     } catch(e) { setUserStatus('Erro de conexão.') }
-    setTimeout(() => setUserStatus(''), 4000)
+    setTimeout(() => setUserStatus(''), 5000)
   }
 
   async function deleteUser(id, name) {
@@ -535,7 +535,6 @@ export default function Admin() {
                 {[
                   { key:'name', label:'Nome completo *', placeholder:'João Silva', type:'text' },
                   { key:'email', label:'E-mail *', placeholder:'joao@empresa.com', type:'email' },
-                  { key:'password', label:'Senha *', placeholder:'Mínimo 8 caracteres', type:'password' },
                 ].map(f => (
                   <div key={f.key} style={{ display:'flex', flexDirection:'column', gap:6 }}>
                     <label style={{ fontSize:11, color:C.textFaint, letterSpacing:'.08em' }}>{f.label}</label>
@@ -568,7 +567,7 @@ export default function Admin() {
               {/* Status */}
               {userStatus && userStatus !== 'saving' && (
                 <div style={{ marginTop:12, padding:'10px 14px', borderRadius:9, background: userStatus==='saved' ? 'rgba(48,240,192,0.08)' : 'rgba(240,80,80,0.08)', border:`0.5px solid ${userStatus==='saved' ? 'rgba(48,240,192,0.3)' : 'rgba(240,80,80,0.3)'}`, fontSize:13, color: userStatus==='saved' ? C.green : '#f05050' }}>
-                  {userStatus==='saved' ? '✓ Usuário criado com sucesso!' : userStatus}
+                  {userStatus==='saved' ? '✓ Convite enviado! O usuário receberá um e-mail para definir a senha e acessar a plataforma.' : userStatus}
                 </div>
               )}
 
@@ -579,7 +578,7 @@ export default function Admin() {
                 </button>
                 <button onClick={createUser} disabled={userStatus==='saving'}
                   style={{ background:'rgba(20,80,140,0.85)', border:`0.5px solid rgba(80,200,255,0.5)`, borderRadius:9, color:C.blue, fontSize:13, fontWeight:500, padding:'10px 24px', cursor:userStatus==='saving'?'not-allowed':'pointer', fontFamily:'inherit', opacity:userStatus==='saving'?0.6:1 }}>
-                  {userStatus==='saving' ? 'Criando...' : '✓ Criar usuário'}
+                  {userStatus==='saving' ? 'Enviando convite...' : '✉️ Enviar convite'}
                 </button>
               </div>
             </div>
