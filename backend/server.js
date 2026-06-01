@@ -589,6 +589,99 @@ app.get("/bootstrap-admin", async (req, res) => {
   }
 });
 
+
+// ════════════════════════════════════════════════════════
+//  ADMIN — USUÁRIOS
+// ════════════════════════════════════════════════════════
+
+// Listar usuários
+app.get("/admin/users", adminAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase.auth.admin.listUsers({ perPage: 200 });
+    if (error) return res.status(500).json({ error: error.message });
+    const users = data.users.map(u => ({
+      id: u.id,
+      email: u.email,
+      name: u.user_metadata?.name || u.email?.split("@")[0],
+      plan: u.user_metadata?.plan || "free",
+      role: u.user_metadata?.role || "user",
+      created_at: u.created_at,
+      last_sign_in: u.last_sign_in_at,
+      confirmed: !!u.email_confirmed_at,
+    }));
+    res.json({ users });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Convidar usuário por email (link de acesso)
+app.post("/admin/users/invite", adminAuth, async (req, res) => {
+  try {
+    const { email, name, plan = "personal", role = "user" } = req.body;
+    if (!email) return res.status(400).json({ error: "Email obrigatorio" });
+    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: { name, plan, role },
+      redirectTo: process.env.APP_URL || "https://synapsys.insightdisc.com/login",
+    });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ ok: true, user: data.user, message: "Convite enviado para " + email });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Criar usuário direto (com senha)
+app.post("/admin/users", adminAuth, async (req, res) => {
+  try {
+    const { email, name, password, plan = "personal", role = "user" } = req.body;
+    if (!email || !name) return res.status(400).json({ error: "Email e nome obrigatorios" });
+    if (password) {
+      // Cria com senha
+      const { data, error } = await supabase.auth.admin.createUser({
+        email, password,
+        user_metadata: { name, plan, role },
+        email_confirm: true,
+      });
+      if (error) return res.status(400).json({ error: error.message });
+      return res.json({ ok: true, user: data.user });
+    } else {
+      // Envia convite
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+        data: { name, plan, role },
+        redirectTo: process.env.APP_URL || "https://synapsys.insightdisc.com/login",
+      });
+      if (error) return res.status(400).json({ error: error.message });
+      return res.json({ ok: true, invited: true, user: data.user, message: "Convite enviado!" });
+    }
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Atualizar plano/role do usuário
+app.patch("/admin/users/:id", adminAuth, async (req, res) => {
+  try {
+    const { plan, role, name } = req.body;
+    const updates = {};
+    if (plan || role || name) {
+      const meta = {};
+      if (plan) meta.plan = plan;
+      if (role) meta.role = role;
+      if (name) meta.name = name;
+      const { data, error } = await supabase.auth.admin.updateUserById(req.params.id, {
+        user_metadata: meta,
+      });
+      if (error) return res.status(400).json({ error: error.message });
+      updates.user = data.user;
+    }
+    res.json({ ok: true, ...updates });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Deletar usuário
+app.delete("/admin/users/:id", adminAuth, async (req, res) => {
+  try {
+    const { error } = await supabase.auth.admin.deleteUser(req.params.id);
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ ok: true, deleted: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post("/auth/register", async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password || !name)
