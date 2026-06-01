@@ -2,7 +2,15 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Synapsys">
+<meta name="theme-color" content="#0d1320">
+<meta name="description" content="Inteligência comportamental DISC aplicada">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <title>SynapsysAI</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -134,12 +142,48 @@ body{background:var(--bg);font-family:'SF Pro Display',-apple-system,BlinkMacSys
 ::-webkit-scrollbar{width:4px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:rgba(80,200,255,0.1);border-radius:2px;}
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  .sidebar{
+    position:fixed;left:0;top:0;bottom:0;z-index:200;
+    transform:translateX(-100%);transition:transform .25s ease;
+    width:80vw;max-width:300px;
+  }
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:199;}
+  .sidebar-overlay.open{display:block;}
+  .main{width:100%;}
+  .chat-header{padding:12px 16px;padding-top:max(12px, env(safe-area-inset-top));}
+  .hamburger{display:flex;}
+  .messages-inner{padding:0 16px;}
+  .input-area{padding:10px 16px;padding-bottom:max(16px, env(safe-area-inset-bottom));}
+  .input-box{font-size:16px;} /* prevents zoom on iOS */
+  .msg-bubble{font-size:14px;}
+  .welcome h2{font-size:20px;}
+  .welcome-chips{flex-direction:column;align-items:stretch;}
+  .chip{text-align:center;}
+  .messages-wrap{
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+@media (min-width: 769px) {
+  .sidebar-overlay{display:none !important;}
+  .hamburger{display:none !important;}
+}
+/* Hamburger button */
+.hamburger{
+  background:none;border:0.5px solid var(--border);border-radius:8px;
+  color:var(--text-dim);padding:6px 10px;cursor:pointer;
+  align-items:center;gap:6px;font-size:13px;
+}
 </style>
 </head>
 <body>
 
 <!-- SIDEBAR -->
-<aside class="sidebar">
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<aside class="sidebar" id="sidebar">
   <div class="sidebar-top">
     <div class="sidebar-logo">
       <div class="logo-dot"></div>
@@ -178,6 +222,7 @@ body{background:var(--bg);font-family:'SF Pro Display',-apple-system,BlinkMacSys
 <!-- MAIN -->
 <main class="main">
   <div class="chat-header">
+    <button class="hamburger" id="hamburger-btn">☰</button>
     <span class="chat-title" id="chat-title">Nova conversa</span>
     <div class="header-actions">
       <button class="header-btn" id="clear-btn">Limpar</button>
@@ -212,5 +257,41 @@ body{background:var(--bg);font-family:'SF Pro Display',-apple-system,BlinkMacSys
 </main>
 
 <script src="/synapsys_v6.js"></script>
+
+<script>
+// Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+// Hamburger / sidebar toggle
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebar-overlay');
+const hamburger = document.getElementById('hamburger-btn');
+
+function openSidebar() { sidebar.classList.add('open'); overlay.classList.add('open'); }
+function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+
+hamburger?.addEventListener('click', openSidebar);
+overlay?.addEventListener('click', closeSidebar);
+
+// Close sidebar on conv click (mobile)
+document.getElementById('conv-list')?.addEventListener('click', () => {
+  if (window.innerWidth <= 768) closeSidebar();
+});
+document.getElementById('new-chat-btn')?.addEventListener('click', () => {
+  if (window.innerWidth <= 768) closeSidebar();
+});
+
+// PWA Install prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Show install button if exists
+  const btn = document.getElementById('install-btn');
+  if (btn) btn.style.display = 'flex';
+});
+</script>
 </body>
 </html>
