@@ -29,7 +29,7 @@ export default function Admin() {
   // Usuarios
   const [users, setUsers] = useState([])
   const [usersLoading, setUsersLoading] = useState(false)
-  const [userForm, setUserForm] = useState({ name:'', email:'', password:'', plan:'personal', role:'user' })
+  const [userForm, setUserForm] = useState({ name:'', email:'', password:'', plan:'free', role:'user' })
   const [userStatus, setUserStatus] = useState('') // '' | 'saving' | 'saved' | 'error' | string
   const [userSearch, setUserSearch] = useState('')
   const [showUserForm, setShowUserForm] = useState(false)
@@ -547,11 +547,9 @@ export default function Admin() {
                   <label style={{ fontSize:11, color:C.textFaint, letterSpacing:'.08em' }}>Plano</label>
                   <select value={userForm.plan} onChange={e => setUserForm(u => ({...u, plan:e.target.value}))}
                     style={{ background:'rgba(8,28,58,0.9)', border:`0.5px solid rgba(80,200,255,0.25)`, borderRadius:9, padding:'10px 14px', fontSize:13, color:C.text, fontFamily:'inherit', outline:'none', cursor:'pointer' }}>
-                    <option value="free">Free / Trial</option>
-                    <option value="personal">Personal</option>
-                    <option value="professional">Professional</option>
-                    <option value="business">Business Corporation</option>
-                    <option value="diamond">Diamond Consulting</option>
+                    <option value="free">Gratuito — 20 msgs/dia</option>
+                    <option value="mensal">Mensal — R$ 79,90/mês</option>
+                    <option value="anual">Anual — R$ 59,90/mês</option>
                   </select>
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -624,11 +622,9 @@ export default function Admin() {
                 <div>
                   <select value={u.plan || 'free'} onChange={e => toggleUserPlan(u.id, e.target.value)}
                     style={{ background:'rgba(80,200,255,0.06)', border:`0.5px solid rgba(80,200,255,0.2)`, borderRadius:6, padding:'4px 8px', fontSize:11, color:C.blue, fontFamily:'inherit', cursor:'pointer', outline:'none' }}>
-                    <option value="free">Free</option>
-                    <option value="personal">Personal</option>
-                    <option value="professional">Professional</option>
-                    <option value="business">Business</option>
-                    <option value="diamond">Diamond</option>
+                    <option value="free">Gratuito</option>
+                    <option value="mensal">Mensal</option>
+                    <option value="anual">Anual</option>
                   </select>
                 </div>
                 <div>
