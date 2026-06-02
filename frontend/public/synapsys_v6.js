@@ -170,7 +170,7 @@ async function loadConversations() {
   if (!session) return;
   try {
     const data = await apiRequest('/api/synapsys/conversations/recent?limit=15');
-    const convs = data?.conversations || data?.data || [];
+    const convs = data?.conversations || data?.items || data?.data || [];
     renderConvList(convs);
   } catch {}
 }
