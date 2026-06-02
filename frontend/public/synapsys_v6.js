@@ -43,9 +43,38 @@ async function refreshSessionIfNeeded(sess) {
 
 function loadSession() {
   try {
+    // Tenta chave customizada primeiro
     const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const now = Math.floor(Date.now() / 1000);
+      if (parsed.expiresAt && parsed.expiresAt > now + 30) return parsed;
+    }
+    // Tenta chave nativa do Supabase
+    const supaKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+    if (supaKey) {
+      const supaRaw = localStorage.getItem(supaKey);
+      if (supaRaw) {
+        const supaData = JSON.parse(supaRaw);
+        if (supaData?.access_token) {
+          const session = {
+            accessToken: supaData.access_token,
+            refreshToken: supaData.refresh_token,
+            expiresAt: supaData.expires_at,
+            user: {
+              id: supaData.user?.id,
+              email: supaData.user?.email,
+              name: supaData.user?.user_metadata?.name || supaData.user?.email?.split('@')[0]
+            }
+          };
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+          return session;
+        }
+      }
+    }
+    // Usa sessao customizada mesmo que expirada (refresh vai renovar)
+    if (raw) return JSON.parse(raw);
+    return null;
   } catch { return null; }
 }
 
