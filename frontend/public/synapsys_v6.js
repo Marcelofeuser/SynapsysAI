@@ -20,6 +20,27 @@ const userBtn = $('user-btn');
 const userMenu = $('user-menu');
 
 // ── AUTH ──
+async function refreshSessionIfNeeded(sess) {
+  if (!sess) return sess;
+  const now = Math.floor(Date.now() / 1000);
+  if (sess.expiresAt && sess.expiresAt > now + 60) return sess; // ainda valido
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: sess.refreshToken })
+    });
+    if (!res.ok) return sess;
+    const data = await res.json();
+    if (data.token) {
+      const updated = { ...sess, accessToken: data.token, expiresAt: data.expiresAt || (now + 3600) };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      return updated;
+    }
+  } catch(e) { console.warn('Refresh falhou:', e); }
+  return sess;
+}
+
 function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -289,6 +310,8 @@ function escHtml(str) {
 
 // ── INIT ──
 session = loadSession();
+// Tenta refresh se token proximo de expirar
+if (session) refreshSessionIfNeeded(session).then(s => { session = s; });
 if (session) {
   renderUser();
   loadConversations();
