@@ -687,6 +687,22 @@ app.delete("/admin/users/:id", adminAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// Refresh de token
+app.post("/auth/refresh", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(400).json({ error: "refreshToken obrigatorio" });
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data.session) return res.status(401).json({ error: "Refresh invalido ou expirado" });
+    res.json({
+      token: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresAt: data.session.expires_at,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post("/auth/register", async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password || !name)
