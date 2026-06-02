@@ -309,12 +309,16 @@ function escHtml(str) {
 }
 
 // ── INIT ──
-session = loadSession();
-// Tenta refresh se token proximo de expirar
-if (session) refreshSessionIfNeeded(session).then(s => { session = s; });
-if (session) {
-  renderUser();
-  loadConversations();
+async function init() {
+  session = loadSession();
+  if (session) {
+    session = await refreshSessionIfNeeded(session);
+  }
+  if (session) {
+    renderUser();
+    loadConversations();
+  }
+  bindChips();
+  inputBox.focus();
 }
-bindChips();
-inputBox.focus();
+init();
