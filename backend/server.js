@@ -1720,6 +1720,104 @@ app.delete("/api/ai/skin-analyses/:id", requireUser, async (req, res) => {
   }
 });
 
+
+// POST /api/ai/mind-analysis — GPT-4o análise psicológica estruturada
+app.post("/api/ai/mind-analysis", requireUser, async (req, res) => {
+  try {
+    const { text, patientInfo } = req.body;
+    if (!text || text.trim().length < 10) return res.status(400).json({ error: "Texto obrigatorio (min 10 chars)" });
+    if (!openai) return res.status(503).json({ error: "OPENAI_API_KEY nao configurada" });
+
+    const analysisResponse = await openai.chat.completions.create({
+      model: "gpt-4o",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: `Voce e um psicologo clinico especialista. Analise o relato e retorne JSON:
+{
+  "estado_humor": "eutimico|deprimido|ansioso|irritado|euforico|apatico|labil|neutro",
+  "nivel_sofrimento": 0-10,
+  "nivel_funcionalidade": 0-10,
+  "insight_paciente": 0-10,
+  "risco_suicidio": "baixo|medio|alto|critico",
+  "conduta_urgente": "string ou null",
+  "hipoteses_diagnosticas": [
+    {"diagnostico": "", "cid": "", "probabilidade": "alta|media|baixa", "justificativa": ""}
+  ],
+  "fatores_risco": [],
+  "pontos_fortes": [],
+  "padroes_cognitivos": [],
+  "recomendacoes_terapeuticas": [],
+  "abordagens_sugeridas": ["TCC","DBT","ACT","Psicanalise", etc],
+  "indicacao_medicacao": "string ou null",
+  "observacoes_clinicas": "",
+  "limitacoes": "Esta analise e baseada em texto e nao substitui avaliacao clinica presencial.",
+  "confianca_analise": "alta|media|baixa"
+}
+${patientInfo ? `Dados do paciente: ${JSON.stringify(patientInfo)}` : ""}`,
+        },
+        { role: "user", content: `Relato clinico:\n\n${text.trim()}` },
+      ],
+    });
+
+    let analysis = null;
+    try {
+      analysis = JSON.parse(analysisResponse.choices[0].message.content);
+    } catch (_) {
+      analysis = { raw: analysisResponse.choices[0].message.content };
+    }
+
+    let savedId = null;
+    if (req.db && req.user) {
+      const { data } = await req.db
+        .from("ai_mind_analyses")
+        .insert({ user_id: req.user.id, input_text: text.trim(), analysis, patient_info: patientInfo || null })
+        .select("id")
+        .single();
+      savedId = data?.id;
+    }
+
+    return res.json({ ok: true, id: savedId, analysis });
+  } catch (error) {
+    console.error("[mind-analysis]", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/ai/mind-analyses
+app.get("/api/ai/mind-analyses", requireUser, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const { data, error } = await req.db
+      .from("ai_mind_analyses")
+      .select("id, input_text, analysis, patient_info, created_at")
+      .eq("user_id", req.user.id)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ items: data || [] });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/ai/mind-analyses/:id
+app.delete("/api/ai/mind-analyses/:id", requireUser, async (req, res) => {
+  try {
+    const { error } = await req.db
+      .from("ai_mind_analyses")
+      .delete()
+      .eq("id", req.params.id)
+      .eq("user_id", req.user.id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
   console.log(`   Provider principal : ${process.env.AI_PROVIDER || "openai"}`);
