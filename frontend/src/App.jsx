@@ -8,7 +8,7 @@ import Success from './pages/Success'
 import Admin from './pages/Admin'
 import Transcription from "./pages/Transcription";
 import Copilot from "./pages/Copilot";
-import SkinAnalysis from "./pages/SkinAnalysis";
+import MindAnalysis from "./pages/MindAnalysis";
 
 export default function App() {
   return (
@@ -22,7 +22,7 @@ export default function App() {
         <Route path="/admin" element={<Admin />} />
               <Route path="/transcricao" element={<Transcription />} />
         <Route path="/copilot" element={<Copilot />} />
-        <Route path="/skin-analysis" element={<SkinAnalysis />} />
+        <Route path="/mind-analysis" element={<MindAnalysis />} />
       </Routes>
     </BrowserRouter>
   )
