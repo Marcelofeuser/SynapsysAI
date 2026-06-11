@@ -9,6 +9,7 @@ import Admin from './pages/Admin'
 import Transcription from "./pages/Transcription";
 import Copilot from "./pages/Copilot";
 import MindAnalysis from "./pages/MindAnalysis";
+import WhatsAppBot from "./pages/WhatsAppBot";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
               <Route path="/transcricao" element={<Transcription />} />
         <Route path="/copilot" element={<Copilot />} />
         <Route path="/mind-analysis" element={<MindAnalysis />} />
+              <Route path="/whatsapp-bot" element={<WhatsAppBot />} />
       </Routes>
     </BrowserRouter>
   )
