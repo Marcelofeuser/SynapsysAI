@@ -100,8 +100,12 @@ export default function Copilot() {
   const bottomRef   = useRef(null);
   const textareaRef = useRef(null);
 
-  const token = () =>
-    localStorage.getItem("synapsys_token") || sessionStorage.getItem("synapsys_token");
+  const token = () => {
+    try {
+      const s = JSON.parse(localStorage.getItem("synapsys.session.v1") || "{}");
+      return s.accessToken || null;
+    } catch { return null; }
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
