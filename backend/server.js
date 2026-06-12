@@ -24,6 +24,7 @@ const {
 const cors = require("cors");
 const OpenAI = require("openai");
 const { loadAllPrompts, loadModePrompt } = require("./src/ai/loadPrompts");
+const { TOOLS: COPILOT_TOOLS, executeTool: executeCopilotTool } = require("./src/ai/copilotTools");
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -1451,7 +1452,7 @@ app.delete("/api/ai/transcriptions/:id", requireUser, async (req, res) => {
   }
 });
 
-// POST /api/ai/copilot — GPT-4o com function calling + contexto do paciente
+// POST /api/ai/copilot — GPT-4o com function calling + dados reais da clínica
 app.post("/api/ai/copilot", requireUser, async (req, res) => {
   try {
     const { messages, patientContext, sessionId } = req.body;
@@ -1460,79 +1461,48 @@ app.post("/api/ai/copilot", requireUser, async (req, res) => {
     }
     if (!openai) return res.status(503).json({ error: "OPENAI_API_KEY nao configurada" });
 
-    const systemPrompt = `Voce e a Synapsys Copilot, assistente clinico para profissionais de saude.
-Ajude com: analise de historico clinico, diagnosticos diferenciais, protocolos baseados em evidencias, redacao de prontuarios e relatorios clinicos.
-Seja preciso, direto e lembre que as decisoes clinicas finais sao sempre do profissional.
-${patientContext ? `\nCONTEXTO DO PACIENTE:\n${JSON.stringify(patientContext, null, 2)}` : ""}`;
+    const systemPrompt = [
+      "Voce e a Synapsys Copilot, assistente clinico para profissionais de saude.",
+      "Voce tem acesso direto aos dados da clinica do profissional logado via ferramentas.",
+      "Use as ferramentas sempre que o profissional pedir informacoes sobre pacientes,",
+      "consultas ou quiser agendar/remarcar. Para perguntas clinicas gerais (diagnosticos,",
+      "protocolos, medicamentos) responda diretamente com base no seu conhecimento.",
+      "Seja preciso, direto e lembre que as decisoes clinicas finais sao sempre do profissional.",
+      patientContext
+        ? `\nCONTEXTO DO PACIENTE ATIVO:\n${JSON.stringify(patientContext, null, 2)}`
+        : "",
+    ].filter(Boolean).join("\n");
 
-    const tools = [
-      {
-        type: "function",
-        function: {
-          name: "buscar_cid10",
-          description: "Busca o codigo CID-10 e descricao para um diagnostico ou condicao clinica",
-          parameters: {
-            type: "object",
-            properties: { diagnostico: { type: "string", description: "Nome do diagnostico" } },
-            required: ["diagnostico"],
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "calcular_dose",
-          description: "Calcula dose de medicamento baseada em peso e indicacao",
-          parameters: {
-            type: "object",
-            properties: {
-              medicamento: { type: "string" },
-              peso_kg: { type: "number" },
-              idade_anos: { type: "number" },
-              indicacao: { type: "string" },
-            },
-            required: ["medicamento"],
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "buscar_protocolo",
-          description: "Busca protocolo ou diretriz clinica para uma condicao",
-          parameters: {
-            type: "object",
-            properties: {
-              condicao: { type: "string" },
-              especialidade: { type: "string" },
-            },
-            required: ["condicao"],
-          },
-        },
-      },
-    ];
-
+    // ── 1ª chamada ao GPT-4o ─────────────────────────────────────────────────
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       temperature: 0.3,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      tools,
+      tools: COPILOT_TOOLS,
       tool_choice: "auto",
     });
 
     const choice = response.choices[0];
     const toolCalls = choice.message.tool_calls || [];
     let finalContent = choice.message.content;
-    let toolResults = [];
+    const toolResults = [];
 
+    // ── Executa ferramentas se houver ─────────────────────────────────────────
     if (toolCalls.length > 0) {
-      const toolMessages = [{ role: "system", content: systemPrompt }, ...messages, choice.message];
+      const toolMessages = [
+        { role: "system", content: systemPrompt },
+        ...messages,
+        choice.message,
+      ];
+
       for (const tc of toolCalls) {
         const args = JSON.parse(tc.function.arguments || "{}");
-        const result = `[${tc.function.name}] Argumentos recebidos: ${JSON.stringify(args)}. Integracao com base clinica em expansao.`;
-        toolMessages.push({ role: "tool", tool_call_id: tc.id, content: result });
+        const result = await executeCopilotTool(tc.function.name, args, req.db, req.user.id);
+        toolMessages.push({ role: "tool", tool_call_id: tc.id, content: String(result) });
         toolResults.push({ name: tc.function.name, args });
       }
+
+      // ── 2ª chamada com resultados das ferramentas ─────────────────────────
       const followUp = await openai.chat.completions.create({
         model: "gpt-4o",
         temperature: 0.3,
@@ -1541,6 +1511,7 @@ ${patientContext ? `\nCONTEXTO DO PACIENTE:\n${JSON.stringify(patientContext, nu
       finalContent = followUp.choices[0].message.content;
     }
 
+    // ── Persiste na sessão se fornecida ───────────────────────────────────────
     if (req.db && req.user && sessionId) {
       const allMessages = [...messages, { role: "assistant", content: finalContent }];
       await req.db
