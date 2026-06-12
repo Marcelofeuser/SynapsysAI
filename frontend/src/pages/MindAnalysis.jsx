@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 
-const API = import.meta.env.VITE_API_URL || "https://synapsys-backend-production.up.railway.app";
+const API = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes("insightdisc") ? import.meta.env.VITE_API_URL : "https://synapsys-backend-production.up.railway.app";
 
 const RISK_COLORS = {
   baixo:  "bg-green-900/40 text-green-300 border-green-800",

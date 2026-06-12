@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const API = import.meta.env.VITE_API_URL || "https://synapsys-backend-production.up.railway.app";
+const API = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes("insightdisc") ? import.meta.env.VITE_API_URL : "https://synapsys-backend-production.up.railway.app";
 
 const DEFAULT_PROMPT = `Você é um assistente virtual de uma clínica de saúde mental.
 Suas responsabilidades:

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 
-const API = import.meta.env.VITE_API_URL || "https://synapsys-backend-production.up.railway.app";
+const API = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes("insightdisc") ? import.meta.env.VITE_API_URL : "https://synapsys-backend-production.up.railway.app";
 
 const FIELD_LABELS = {
   queixa_principal:      "Queixa Principal",

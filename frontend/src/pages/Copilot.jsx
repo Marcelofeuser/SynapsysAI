@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 
-const API = import.meta.env.VITE_API_URL || "https://synapsys-backend-production.up.railway.app";
+const API = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes("insightdisc") ? import.meta.env.VITE_API_URL : "https://synapsys-backend-production.up.railway.app";
 
 const QUICK_PROMPTS = [
   { icon: "🧠", label: "Critérios diagnósticos", text: "Quais são os critérios diagnósticos para depressão maior?" },
