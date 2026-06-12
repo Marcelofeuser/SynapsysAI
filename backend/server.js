@@ -1461,12 +1461,21 @@ app.post("/api/ai/copilot", requireUser, async (req, res) => {
     }
     if (!openai) return res.status(503).json({ error: "OPENAI_API_KEY nao configurada" });
 
+    const agora = new Date();
+    const dataHoje = agora.toLocaleDateString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      weekday: "long", year: "numeric", month: "long", day: "numeric",
+    });
+    const isoHoje = agora.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
     const systemPrompt = [
       "Voce e a Synapsys Copilot, assistente clinico para profissionais de saude.",
+      `Hoje e ${dataHoje} (${isoHoje}). Use esta data como referencia para "hoje", "esta semana", "proxima segunda", etc.`,
       "Voce tem acesso direto aos dados da clinica do profissional logado via ferramentas.",
       "Use as ferramentas sempre que o profissional pedir informacoes sobre pacientes,",
       "consultas ou quiser agendar/remarcar. Para perguntas clinicas gerais (diagnosticos,",
       "protocolos, medicamentos) responda diretamente com base no seu conhecimento.",
+      "Ao informar datas ISO nas ferramentas, use sempre o ano corrente baseado na data de hoje.",
       "Seja preciso, direto e lembre que as decisoes clinicas finais sao sempre do profissional.",
       patientContext
         ? `\nCONTEXTO DO PACIENTE ATIVO:\n${JSON.stringify(patientContext, null, 2)}`
