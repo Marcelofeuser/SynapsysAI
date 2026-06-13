@@ -23,6 +23,7 @@ export default function App() {
         <Route path="/admin" element={<Admin />} />
               <Route path="/transcricao" element={<Transcription />} />
         <Route path="/copilot" element={<Copilot />} />
+        <Route path="/:produto/copilot" element={<Copilot />} />
         <Route path="/mind-analysis" element={<MindAnalysis />} />
               <Route path="/whatsapp-bot" element={<WhatsAppBot />} />
       </Routes>

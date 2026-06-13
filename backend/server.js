@@ -1455,7 +1455,7 @@ app.delete("/api/ai/transcriptions/:id", requireUser, async (req, res) => {
 // POST /api/ai/copilot — GPT-4o com function calling + dados reais da clínica
 app.post("/api/ai/copilot", requireUser, async (req, res) => {
   try {
-    const { messages, patientContext, sessionId } = req.body;
+    const { messages, patientContext, sessionId, product = "psicothera" } = req.body;
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: "messages (array) obrigatorio" });
     }
@@ -1506,7 +1506,7 @@ app.post("/api/ai/copilot", requireUser, async (req, res) => {
 
       for (const tc of toolCalls) {
         const args = JSON.parse(tc.function.arguments || "{}");
-        const result = await executeCopilotTool(tc.function.name, args, req.db, req.user.id);
+        const result = await executeCopilotTool(tc.function.name, args, req.db, req.user.id, product);
         toolMessages.push({ role: "tool", tool_call_id: tc.id, content: String(result) });
         toolResults.push({ name: tc.function.name, args });
       }
@@ -1525,7 +1525,7 @@ app.post("/api/ai/copilot", requireUser, async (req, res) => {
       const allMessages = [...messages, { role: "assistant", content: finalContent }];
       await req.db
         .from("ai_copilot_sessions")
-        .update({ messages: allMessages, updated_at: new Date().toISOString() })
+        .update({ messages: allMessages, product, updated_at: new Date().toISOString() })
         .eq("id", sessionId)
         .eq("user_id", req.user.id);
     }
@@ -1541,6 +1541,8 @@ app.post("/api/ai/copilot", requireUser, async (req, res) => {
 app.get("/api/ai/copilot/sessions", requireUser, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const filterProduct = req.query.product || null;
+    const filterProduct = req.query.product || null;
     const { data, error } = await req.db
       .from("ai_copilot_sessions")
       .select("id, title, context, created_at, updated_at")
