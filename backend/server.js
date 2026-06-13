@@ -1542,7 +1542,6 @@ app.get("/api/ai/copilot/sessions", requireUser, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const filterProduct = req.query.product || null;
-    const filterProduct = req.query.product || null;
     const { data, error } = await req.db
       .from("ai_copilot_sessions")
       .select("id, title, context, created_at, updated_at")
