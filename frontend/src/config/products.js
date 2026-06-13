@@ -5,7 +5,7 @@ export const PRODUCTS = {
   psicothera: {
     id: "psicothera",
     name: "PsicoThera",
-    copilotName: "Copiloto IA",
+    copilotName: "PsicoThera Copilot",
     dashboardUrl: "https://psicothera.com.br/dashboard",
     theme: "light",
     accent: "teal",          // teal-600 etc

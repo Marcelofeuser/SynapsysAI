@@ -160,7 +160,7 @@ export default function Copilot() {
                   <h1 className="text-sm font-semibold text-slate-800">{product.copilotName}</h1>
                   <span className={`text-[10px] font-medium ${a.bgSoft} ${a.text} border ${a.borderSoft} px-1.5 py-0.5 rounded-full`}>GPT-4o</span>
                 </div>
-                <p className="text-slate-400 text-xs">{product.name} · acesso aos dados</p>
+                <p className="text-slate-400 text-xs">Assistente clínico · acesso aos dados</p>
               </div>
             </div>
           </div>
